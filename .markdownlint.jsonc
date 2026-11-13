@@ -1,0 +1,12 @@
+{
+  // markdownlint configuration for the documentation-only baseline.
+  // Prose lines and wide tables are intentional in this design doc set, so
+  // line length and compact table pipes are not enforced. Everything else
+  // keeps the markdownlint defaults.
+  "default": true,
+  "MD013": false, // line-length: long prose/table lines are deliberate
+  "MD060": false, // table-column-style: compact "|---|" separators are used
+  "MD033": { "allowed_elements": ["br", "sub", "sup", "kbd", "details", "summary"] },
+  "MD041": true, // first line must be a top-level heading
+  "MD040": true // fenced code blocks must declare a language
+}

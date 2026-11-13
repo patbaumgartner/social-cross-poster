@@ -1,0 +1,6 @@
+{
+  // markdownlint-cli2 options: never lint dependencies or tooling output.
+  // The rule configuration itself lives in .markdownlint.jsonc.
+  "gitignore": true,
+  "ignores": ["node_modules/**", "package-lock.json"]
+}

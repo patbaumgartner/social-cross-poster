@@ -1,0 +1,14 @@
+{
+  "name": "social-cross-poster",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Documentation tooling for the social-cross-poster design baseline. The application itself is not implemented yet.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "check:docs": "python3 scripts/check-docs.py"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.19.1"
+  }
+}

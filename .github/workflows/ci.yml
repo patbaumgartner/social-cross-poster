@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel in-progress runs for the same branch/PR when a new commit is pushed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: the docs pipeline only reads the repository.
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Docs – consistency & lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Documentation consistency: relative links, anchors, ADR/UC references.
+      - name: Check documentation consistency
+        run: python3 scripts/check-docs.py
+
+      # Markdown style, pinned through package-lock.json (Dependabot updates it).
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install lint tooling (pinned)
+        run: npm ci --ignore-scripts
+
+      - name: Lint Markdown
+        run: npm run lint:md

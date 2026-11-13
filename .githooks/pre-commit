@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Pre-commit hook: keep the documentation consistent before every commit.
+# Enable once per clone:  git config core.hooksPath .githooks
+set -e
+
+echo "▶ Checking documentation consistency (links, anchors, ADR/UC references)..."
+python3 scripts/check-docs.py
+
+if [ -x node_modules/.bin/markdownlint-cli2 ]; then
+  echo "▶ Linting Markdown..."
+  node_modules/.bin/markdownlint-cli2 "**/*.md"
+elif command -v npx >/dev/null 2>&1 && npx --no-install markdownlint-cli2 --version >/dev/null 2>&1; then
+  echo "▶ Linting Markdown (npx)..."
+  npx --no-install markdownlint-cli2 "**/*.md"
+else
+  echo "▶ Skipping markdownlint (run 'npm ci' once to enable it locally)."
+fi
