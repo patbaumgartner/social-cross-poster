@@ -26,3 +26,7 @@
 ## Postconditions and UI
 
 Account sets remain logically isolated inside one owner's installation. Display workspace and actual destination audience throughout publication; Private is a set label rather than a platform privacy guarantee.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-005, ADR-007 and ADR-013. One-owner installations with workspace-local account sets, explicit switching, secret-free export and archive-with-reconciliation match ADR-005/ADR-007/ADR-013. Backup, restore-drill and retention behavior for exported/archived workspaces are specified in the [operations and recovery design](../operations/README.md). No behavior change.
