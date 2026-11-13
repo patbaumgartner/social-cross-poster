@@ -25,3 +25,7 @@
 ## Postconditions and UI
 
 External delivery is best effort; persisted in-app events remain authoritative. A test notification names the workspace and exact recipient before sending.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-004, ADR-007, ADR-013 and ADR-015. Encrypted recipient credentials, redacted atomic events, deduplicated bounded delivery and authoritative in-app events match ADR-007/ADR-015; workspace scoping matches ADR-013. The SSRF/link-local/metadata rejection rules for outbound notification destinations are specified in [arc42 §8 — Cross-cutting concepts, Security](../arc42/08-cross-cutting-concepts.md#security). No behavior change.
