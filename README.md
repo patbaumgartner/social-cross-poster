@@ -1,5 +1,10 @@
 # Social Cross-Poster
 
+[![CI](https://github.com/patbaumgartner/social-cross-poster/actions/workflows/ci.yml/badge.svg)](https://github.com/patbaumgartner/social-cross-poster/actions/workflows/ci.yml)
+[![Dependency Review](https://github.com/patbaumgartner/social-cross-poster/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/patbaumgartner/social-cross-poster/actions/workflows/dependency-review.yml)
+[![Dependabot](https://img.shields.io/badge/dependabot-enabled-025E8C?logo=dependabot)](https://github.com/patbaumgartner/social-cross-poster/security/dependabot)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 A planned self-hosted application for writing, reviewing, and publishing content across several brands and social accounts. Inspired by [crosspost](https://github.com/humanwhocodes/crosspost), with a browser UI and a Docker Compose deployment for a NAS.
 
 **Status: documentation and design only.** There is no application, Compose file, release image, or runnable quick start yet.
@@ -49,6 +54,13 @@ Source repository: [patbaumgartner/social-cross-poster](https://github.com/patba
 - [Integration catalog](docs/platforms/README.md)
 - [Operations and recovery](docs/operations/README.md)
 
+## Community
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Security policy](SECURITY.md)
+- [Support](SUPPORT.md)
+
 ## License
 
-Apache-2.0 is the intended license. Add the license text and notices before distributing code; a LICENSE file is not present yet.
+Licensed under the [Apache License 2.0](LICENSE).
