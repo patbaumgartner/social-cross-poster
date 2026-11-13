@@ -25,3 +25,7 @@
 ## Postconditions and UI
 
 Drafts remain private and recoverable. Show revision timestamps, workspace, and AI acceptance provenance. Unaccepted AI suggestions are separate from draft content.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-003, ADR-004, ADR-013 and ADR-016. Immutable revisions, optimistic conflict handling, workspace-scoped listing and duplicate-only-in-workspace match ADR-003/ADR-004/ADR-013; the 30-day pruning and retention/dependency rules are owned by ADR-016 (already linked inline). No behavior change.
