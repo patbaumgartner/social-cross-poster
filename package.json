@@ -9,6 +9,6 @@
     "check:docs": "python3 scripts/check-docs.py"
   },
   "devDependencies": {
-    "markdownlint-cli2": "0.19.1"
+    "markdownlint-cli2": "0.24.0"
   }
 }
