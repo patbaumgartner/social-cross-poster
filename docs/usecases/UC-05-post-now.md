@@ -12,7 +12,7 @@
 3. Return the persisted result page immediately; publication continues if the browser closes.
 4. Workers claim jobs, revalidate authorization/capability compatibility, and publish with bounded parallelism. Upload/container stages and acknowledgements are persisted.
 5. Record each destination's state and redacted attempts/external references. An uncertain remote write becomes UNKNOWN; a safe transient failure may enter RETRY_WAIT.
-6. Derive aggregate status using ADR-015 and send deduplicated workspace notifications for actionable failures/uncertainty.
+6. Derive aggregate status using ADR-015 and send deduplicated workspace notifications ([UC-12](UC-12-failure-notifications.md)) for actionable failures/uncertainty.
 
 ## Alternative flows
 
@@ -26,3 +26,7 @@
 ## Postconditions and UI
 
 Approved payloads and delivery history are immutable. Poll persisted destination states; show external links only when verified. PUBLISHED means every selected delivery succeeded; PARTIAL and NEEDS_ATTENTION have distinct meanings.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-001, ADR-003 and ADR-015. Atomic submission under a workspace-scoped key, immutable payload binding, UNKNOWN for ambiguous writes and the ADR-015 aggregate rule all match. The notification step now links UC-12 explicitly. No behavior change.
