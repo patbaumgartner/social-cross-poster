@@ -3,7 +3,7 @@
 - **Actor:** Owner; external AI provider
 - **Trigger:** Explicit assistant action in a draft or remote-edit editor
 - **Preconditions:** Active workspace; AI opt-in/key/model configured; processing region and spending cap explicitly agreed and configured
-- **Related decisions:** ADR-003, ADR-014
+- **Related decisions:** ADR-003, ADR-014, ADR-016
 
 ## Main flow
 
@@ -27,3 +27,7 @@
 ## Postconditions and UI
 
 AI suggestions have no publishing authority. Accepted changes retain provenance and undo through revisions; unaccepted suggestions expire according to workspace policy (default seven days). Review improves editorial quality but does not certify facts or link safety. Explain API credentials, provider retention, and usage estimates in settings.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-003, ADR-014 and ADR-016. Bounded server-side requests with workspace/base-version binding, human acceptance into a new revision, no publishing authority and base-version checks match ADR-014; the processing-region and spending-cap preconditions are owned by ADR-016 and were added to the related decisions. No behavior change.
