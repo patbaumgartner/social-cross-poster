@@ -25,3 +25,7 @@
 ## Postconditions and UI
 
 No experiment is a core-release requirement. Pairing/admin interfaces remain private and credentials/session files isolated per workspace. Experimental opt-in does not imply guaranteed delivery, account safety, or official API support.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-010, ADR-013 and ADR-015. Feasibility-gated opt-in, permanent experimental label, WhatsApp Business exclusion, separate Signal capabilities and UNKNOWN acknowledgements match ADR-010's feasibility policy; workspace isolation matches ADR-013; delivery/reconciliation matches ADR-015. No behavior change.
