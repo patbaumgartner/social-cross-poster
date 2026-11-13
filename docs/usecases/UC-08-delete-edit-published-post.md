@@ -24,3 +24,7 @@
 ## Postconditions and UI
 
 No invented generic edit endpoint or guarantee of erasing third-party copies. Original content, approved edits, and remote outcomes remain auditable. AI assistance never submits the remote action.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-001, ADR-003 and ADR-015. Capability-gated operations, separate remote_action records that preserve the original delivery, and no replacement create-post after an uncertain edit/delete all match ADR-001/ADR-015; edit payloads are action-specific revisions per ADR-003. No behavior change.
