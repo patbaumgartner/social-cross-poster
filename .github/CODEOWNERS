@@ -1,0 +1,6 @@
+# Maintainer owns everything; reviews are required for changes to decisions and use cases.
+* @patbaumgartner
+
+# Architecture decisions need explicit maintainer review
+/docs/adr/ @patbaumgartner
+/docs/usecases/ @patbaumgartner

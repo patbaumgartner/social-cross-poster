@@ -1,0 +1,51 @@
+name: Feature request
+description: Propose a new capability, integration, or design change
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check [Plan.md](../../Plan.md) (scope and exclusions) and the
+        [integration catalog](../../docs/platforms/README.md) first — several
+        ideas (recurring posts, cross-workspace campaigns, WhatsApp Business,
+        permanent image hosting) are explicitly excluded.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What can't be done today that should be possible?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the behavior and which workspace/destination it applies to
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you consider, and why is it not enough?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Editorial / composer (UC-04, UC-09, UC-16)
+        - Publishing / scheduling (UC-05, UC-10, UC-11)
+        - Accounts / integrations (UC-02, UC-13, UC-14, platforms catalog)
+        - History / recovery (UC-06, UC-07, UC-08, UC-12)
+        - Workspace / operations (UC-01, UC-15, operations docs)
+        - Repository / CI
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope-check
+    attributes:
+      label: Scope check
+      options:
+        - label: This does not cross workspace boundaries, does not add recurrence, and does not involve WhatsApp Business
+          required: true

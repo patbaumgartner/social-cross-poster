@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability (private)
+    url: https://github.com/patbaumgartner/social-cross-poster/blob/main/SECURITY.md
+    about: Report security issues privately, never as a public issue
+  - name: Questions and design discussions
+    url: https://github.com/patbaumgartner/social-cross-poster/discussions
+    about: Ask questions and discuss design in GitHub Discussions

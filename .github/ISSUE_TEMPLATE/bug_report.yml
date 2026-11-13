@@ -1,0 +1,39 @@
+name: Bug report
+description: Report an incorrect, inconsistent, or broken part of the design or documentation
+description: "Report something that does not work as documented (broken link, inconsistent use case/ADR, wrong claim)."
+title: "bug: "
+labels: ["bug", "documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Since this project is currently documentation-only,
+        "bugs" are usually broken links, inconsistencies between documents, or
+        incorrect claims. If you found a security issue, please use
+        [SECURITY.md](../../SECURITY.md) instead — do not open a public issue.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What is wrong?
+      description: What did you expect, and what does the documentation say instead?
+      placeholder: "UC-10 says X, but ADR-016 says Y ..."
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Where?
+      description: File and section, e.g. docs/usecases/UC-10-schedule-post.md, "Main flow", step 3
+      placeholder: docs/usecases/UC-10-schedule-post.md
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How to reproduce / verify
+      description: Steps or commands that show the problem (e.g. `python3 scripts/check-docs.py` output)
+  - type: textarea
+    id: suggested-fix
+    attributes:
+      label: Suggested fix (optional)
+      description: Which document should change, and how?
