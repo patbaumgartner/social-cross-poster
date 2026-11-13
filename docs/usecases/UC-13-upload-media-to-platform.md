@@ -27,3 +27,7 @@
 ## Postconditions and UI
 
 The provider stores the published image; revoking the temporary source URL must not break it. Private files support editing/scheduling/retries, not public hosting. Setup and preflight explain whether a destination uses direct upload or temporary import.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-003, ADR-008 and ADR-015. Direct upload vs. short-lived revocable import grants, platform-owned media references, no permanent public source URLs and UNKNOWN reconciliation under UC-07 match ADR-008 (private sources, platform-hosted images) and ADR-015 (delivery states); frozen payloads per ADR-003. No behavior change.
