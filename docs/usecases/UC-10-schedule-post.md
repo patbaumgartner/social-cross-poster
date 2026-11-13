@@ -25,3 +25,7 @@
 ## Postconditions and UI
 
 The approved intent survives restart. Scheduling means best-effort execution when dependencies are available, not guaranteed delivery at an exact instant. Show the timezone alongside every scheduled time.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-004, ADR-009, ADR-015 and ADR-016. Explicit IANA timezone with DST gap/overlap resolution, frozen payload snapshots at approval, durable one-shot scheduling and the scheduled-instant-plus-15-minutes dispatch cutoff match ADR-009/ADR-015/ADR-016; best-effort semantics match the ADR-004 domain scope. No behavior change.
