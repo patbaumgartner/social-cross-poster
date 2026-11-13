@@ -3,7 +3,7 @@
 - **Actor:** Owner
 - **Trigger:** New post or open draft
 - **Preconditions:** Logged in; active workspace; connected accounts are not required to save a draft
-- **Related decisions:** ADR-003, ADR-004, ADR-014, ADR-015
+- **Related decisions:** ADR-003, ADR-004, ADR-008, ADR-014, ADR-015, ADR-016
 
 ## Main flow
 
@@ -27,3 +27,7 @@
 ## Postconditions and UI
 
 The draft has a revision and explicit validation results, not a remote post. Previews describe payload content, not pixel-perfect platform rendering. Keyboard shortcuts open confirmation; they never bypass it. Use readable diffs, keyboard controls, and status labels beyond color.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-003, ADR-004, ADR-008, ADR-014, ADR-015 and ADR-016. Layered override precedence and blocking (never silent truncation/media loss) match ADR-003; media validation, private originals and GPS/camera metadata stripping on outgoing derivatives are owned by ADR-008 and ADR-016, both added to the related decisions; AI acceptance creates a new revision per ADR-014; approval freezes payloads per ADR-015. No behavior change.
