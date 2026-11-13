@@ -10,11 +10,17 @@
   },
   "devDependencies": {
 <<<<<<< HEAD
+<<<<<<< HEAD
     "markdownlint-cli2": "0.24.0"
 ||||||| parent of 2649188 (deps(node)(deps): bump js-yaml and markdownlint-cli2)
     "markdownlint-cli2": "0.19.1"
 =======
     "markdownlint-cli2": "0.24.1"
 >>>>>>> 2649188 (deps(node)(deps): bump js-yaml and markdownlint-cli2)
+||||||| parent of e9ad9d6 (deps(node)(deps): bump markdown-it and markdownlint-cli2)
+    "markdownlint-cli2": "0.19.1"
+=======
+    "markdownlint-cli2": "0.24.1"
+>>>>>>> e9ad9d6 (deps(node)(deps): bump markdown-it and markdownlint-cli2)
   }
 }
