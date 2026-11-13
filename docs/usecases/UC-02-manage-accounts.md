@@ -3,7 +3,7 @@
 - **Actor:** Owner
 - **Trigger:** Open Accounts in the active workspace
 - **Preconditions:** Logged in; workspace active; integration has passed its verification gate
-- **Related decisions:** ADR-001, ADR-006, ADR-007, ADR-013
+- **Related decisions:** ADR-001, ADR-006, ADR-007, ADR-011, ADR-013
 
 ## Main flow
 
@@ -27,3 +27,7 @@
 ## Postconditions and UI
 
 Connections and destinations remain workspace-scoped; secrets never return to the browser after save. Show account labels plus stable identity/instance so similarly named brands are distinguishable. AI provider credentials belong to workspace AI settings, not social destinations.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-001, ADR-006, ADR-007, ADR-011 and ADR-013. Connection/destination split, OAuth workspace binding and encrypted secrets match ADR-006/ADR-007; the Telegram webhook-ownership conflict rule is owned by ADR-011 and was added to the related decisions. No behavior change.
