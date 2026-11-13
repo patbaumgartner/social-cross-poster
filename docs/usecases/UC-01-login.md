@@ -3,7 +3,7 @@
 - **Actor:** Owner
 - **Trigger:** Open the application
 - **Preconditions:** Owner credentials configured; deployment reachable over HTTPS
-- **Related decisions:** ADR-005, ADR-013
+- **Related decisions:** ADR-005, ADR-008, ADR-013
 
 ## Main flow
 
@@ -22,3 +22,7 @@
 ## Postconditions and UI
 
 An authenticated session exists; workspace access is checked independently on each operation. The owner can manage all v1 workspaces, but content queries remain scoped. No long-lived remember-me in v1. Show the workspace name/color persistently, with accessible text labels.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-005, ADR-008 and ADR-013. Session rotation, CSRF and fail-closed startup without bootstrap credentials match ADR-005; the HTTPS deployment precondition is owned by ADR-008 and was added to the related decisions. No behavior change.
