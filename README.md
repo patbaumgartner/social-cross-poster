@@ -1,0 +1,54 @@
+# Social Cross-Poster
+
+A planned self-hosted application for writing, reviewing, and publishing content across several brands and social accounts. Inspired by [crosspost](https://github.com/humanwhocodes/crosspost), with a browser UI and a Docker Compose deployment for a NAS.
+
+**Status: documentation and design only.** There is no application, Compose file, release image, or runnable quick start yet.
+
+## One owner per installation, several account sets
+
+Each person runs their own installation with one owner login. **Private**, **socrates-ch**, **Voxxed Days Zurich**, and **Voxxed Days Ticino** are separate workspaces (tenants/account sets) within that installation.
+
+Each workspace owns accounts, contacts, drafts, media, history, schedules, notification channels, and AI settings. Connect multiple accounts of the same platform, including several Mastodon identities, LinkedIn personal profiles and company pages, or Telegram channels.
+
+A post publishes only to selected accounts within its workspace. Posts in Private stay within the Private account set; no publishing action spans workspaces and there is no cross-workspace copy or campaign workflow. Workspace separation does not determine the public/private visibility of the resulting platform post: its actual audience is shown in the destination preview.
+
+## Intended workflow
+
+1. Choose a workspace and write a draft with text and up to four still images with meaningful alt text.
+2. Optionally ask the **AI assistant (ChatGPT-style, via the OpenAI API)** to write, review, correct, shorten, translate, or suggest variants using that workspace's language and brand voice.
+3. Compare suggestions and accept changes explicitly.
+4. Select workspace-local destinations and review the exact identity, audience, text, mentions, and images for each.
+5. Publish now or approve a one-time schedule. To send similar content again, duplicate it into a separate draft in the same workspace and schedule that post individually.
+
+AI never publishes or schedules. Manual editing and publishing remain available without AI. There are no recurring posts or automatic repeat rules.
+
+## Platform scope
+
+The initial delivery includes **Bluesky, Mastodon, Telegram channel/group posts, LinkedIn personal profiles, and LinkedIn company pages**. LinkedIn page access and required app permissions must be proven before the initial release is complete.
+
+X, Instagram, and Threads follow through the [integration catalog](docs/platforms/README.md). Facebook Pages are optional later work. Every integration is currently planned rather than implemented.
+
+**WhatsApp Business is not supported:** no Cloud API, Business onboarding, messaging, or OAuth. Personal WhatsApp Status and Signal remain separate optional unofficial feasibility work.
+
+## Images and architecture
+
+Published images must be stored by the destination platform. The app keeps private source files for drafts, previews, scheduling, and retries; it does not serve permanent public images or insert its own image URLs into published posts. Media transport must satisfy [ADR-008](docs/adr/ADR-008-app-origin-and-platform-media.md).
+
+Use a Spring Boot/Java monolith with Thymeleaf + HTMX, PostgreSQL, workspace-scoped private storage, and a durable publishing queue. Approved revisions and delivery attempts remain auditable. Credentials are encrypted with keys supplied outside the database. Follow the [latest stable technology baseline](docs/technologies.md) and Cloud Native Buildpacks/Paketo image policy.
+
+Source repository: [patbaumgartner/social-cross-poster](https://github.com/patbaumgartner/social-cross-poster).
+
+## Documentation
+
+- [Product plan and delivery gates](Plan.md)
+- [Latest technology versions and Buildpacks policy](docs/technologies.md)
+- [Critical review and additional ideas](docs/documentation-review.md)
+- [Use cases](docs/usecases/README.md)
+- [Architecture decisions](docs/adr/README.md)
+- [arc42 architecture](docs/arc42/00-index.md)
+- [Integration catalog](docs/platforms/README.md)
+- [Operations and recovery](docs/operations/README.md)
+
+## License
+
+Apache-2.0 is the intended license. Add the license text and notices before distributing code; a LICENSE file is not present yet.
