@@ -25,3 +25,7 @@
 ## Postconditions and UI
 
 The new post has its own lifecycle and no authority to publish until approved. No repeat checkbox, recurrence rule, series linkage, cron job or automatic date replacement exists.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-003, ADR-004, ADR-013 and ADR-015. Independent copy with cleared approval/schedule/external identifiers, private reference-counted source media and same-workspace-only duplication match ADR-003 (revisions/overrides), ADR-004 (domain), ADR-013 (tenancy) and ADR-015 (immutable approval/lifecycle). No behavior change.
