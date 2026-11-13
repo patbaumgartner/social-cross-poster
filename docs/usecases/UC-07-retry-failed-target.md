@@ -3,7 +3,7 @@
 - **Actor:** Owner or durable retry worker
 - **Trigger:** Safe retry is due, or owner opens a failed/UNKNOWN delivery
 - **Preconditions:** Original workspace, approved payload, and destination remain valid
-- **Related decisions:** ADR-001, ADR-015
+- **Related decisions:** ADR-001, ADR-009, ADR-015
 
 ## Main flow
 
@@ -26,3 +26,7 @@
 ## Postconditions and UI
 
 No remote exactly-once guarantee is claimed. Distinguish “Retry safely”, “Reconcile”, and “Retry with duplicate risk” instead of one universal button. Show the payload and destination that will be reused.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-001, ADR-009, ADR-015 and ADR-016. UNKNOWN-before-retry, bounded retries (three automatic after the initial attempt), frozen payload reuse and the scheduled-instant-plus-15-minutes cutoff match ADR-015/ADR-016; durable claims, leases and fencing are owned by ADR-009 and were added to the related decisions. No behavior change.
