@@ -9,6 +9,12 @@
     "check:docs": "python3 scripts/check-docs.py"
   },
   "devDependencies": {
+<<<<<<< HEAD
     "markdownlint-cli2": "0.24.0"
+||||||| parent of 2649188 (deps(node)(deps): bump js-yaml and markdownlint-cli2)
+    "markdownlint-cli2": "0.19.1"
+=======
+    "markdownlint-cli2": "0.24.1"
+>>>>>>> 2649188 (deps(node)(deps): bump js-yaml and markdownlint-cli2)
   }
 }
