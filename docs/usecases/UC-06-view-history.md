@@ -24,3 +24,7 @@
 ## Postconditions and UI
 
 Browsing is read-only; retry/edit/delete each requires its own explicit action. Display delivery state separately from later remote action state, with clear labels for uncertain outcomes.
+
+## Review log
+
+- 2026-11-13 — Reviewed against ADR-004, ADR-013 and ADR-015. Read-only workspace-scoped history, archived-destination labels, cross-workspace URL rejection and the delivery-vs-remote-action state split match the domain model (ADR-004), tenancy rules (ADR-013) and lifecycle states (ADR-015). No behavior change.
