@@ -3,9 +3,9 @@ package com.patbaumgartner.socialcrossposter.platform;
 import java.util.Set;
 
 /**
- * Platform keys of the integration catalog (docs/platforms/README.md). Contacts may
- * carry handles for platforms that are not connected yet, so this list is broader
- * than the wired {@link PlatformProbe}s.
+ * Platform keys of the integration catalog (docs/platforms/README.md). Contacts may carry
+ * handles for platforms that are not connected yet, so this list is broader than the
+ * wired {@link PlatformProbe}s.
  */
 public final class PlatformKeys {
 
@@ -17,4 +17,3 @@ public final class PlatformKeys {
 			"threads", "facebook", "whatsapp-status", "signal");
 
 }
-

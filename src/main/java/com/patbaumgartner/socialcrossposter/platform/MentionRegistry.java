@@ -8,10 +8,10 @@ import java.util.TreeMap;
 import org.springframework.stereotype.Component;
 
 /**
- * Registry of verified {@link MentionContract}s keyed by platform (ADR-003 point 6).
- * A platform without a contract always resolves to the visible display-name fallback
- * — no invented mention entities (ADR-003 point 6). The index is rebuilt on access so
- * test overrides are reflected.
+ * Registry of verified {@link MentionContract}s keyed by platform (ADR-003 point 6). A
+ * platform without a contract always resolves to the visible display-name fallback — no
+ * invented mention entities (ADR-003 point 6). The index is rebuilt on access so test
+ * overrides are reflected.
  */
 @Component
 public class MentionRegistry {
@@ -41,15 +41,14 @@ public class MentionRegistry {
 	}
 
 	/**
-	 * Resolves a candidate for a platform; platforms without a verified contract get
-	 * the display-name fallback with an explicit note.
+	 * Resolves a candidate for a platform; platforms without a verified contract get the
+	 * display-name fallback with an explicit note.
 	 */
 	public MentionResolution resolve(String platform, MentionCandidate candidate, String displayName) {
-		return find(platform)
-			.map((contract) -> contract.resolve(candidate, displayName))
-			.orElseGet(() -> MentionResolution.fallback(displayName,
-					"No verified mention contract for platform '" + platform
-							+ "' yet; the preview shows the display name only and does not claim a notification (ADR-003)."));
+		return find(platform).map((contract) -> contract.resolve(candidate, displayName))
+			.orElseGet(() -> MentionResolution.fallback(displayName, "No verified mention contract for platform '"
+					+ platform
+					+ "' yet; the preview shows the display name only and does not claim a notification (ADR-003)."));
 	}
 
 }

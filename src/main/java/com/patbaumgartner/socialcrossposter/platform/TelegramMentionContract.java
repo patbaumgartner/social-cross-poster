@@ -6,10 +6,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * Telegram mention contract (ADR-003 point 6): Telegram natively resolves
- * {@code @username} in message text (Bot API creates a mention link), so a contact
- * handle that is a valid Telegram username is a native mention. Any other identity
- * kind (DID, URN, URL) is not a Telegram-native identity and falls back to the display
- * name. The contract uses exactly the entered handle — it never invents an identifier.
+ * {@code @username} in message text (Bot API creates a mention link), so a contact handle
+ * that is a valid Telegram username is a native mention. Any other identity kind (DID,
+ * URN, URL) is not a Telegram-native identity and falls back to the display name. The
+ * contract uses exactly the entered handle — it never invents an identifier.
  */
 @Component
 public class TelegramMentionContract implements MentionContract {
