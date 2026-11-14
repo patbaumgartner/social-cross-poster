@@ -48,6 +48,33 @@
     </section>
 
     <section class="card">
+      <h2>Publish</h2>
+      <p>Publishing binds the current revision to a workspace-scoped submission key and sends one
+        immutable, mention-resolved payload per selected destination (UC-05, ADR-015). Resubmitting
+        the same key with the same content returns the existing publication.</p>
+      <form method="get" th:action="@{/w/{slug}/posts/{id}/publish(slug=${workspace.slug},id=${post.id})}">
+        <button class="primary" type="submit">Publish now…</button>
+      </form>
+      <h3>Publications</h3>
+      <p th:if="${publications.isEmpty()}"><em>No publications yet.</em></p>
+      <ul th:if="${!publications.isEmpty()}">
+        <li th:each="p : ${publications}">
+          <span class="badge" th:text="${p.state}">PUBLISHED</span>
+          submission <code th:text="${p.submissionKey}">key</code>
+          · revision #<span th:text="${p.revisionId}">1</span>
+          · <small th:text="${p.createdAt}">created</small>
+          <ul>
+            <li th:each="d : ${deliveriesByPublication.get(p.id)}">
+              <span th:text="${d.platform + ' · ' + d.destinationLabel}">telegram · My channel</span>
+              <span class="badge" th:text="${d.state}">PENDING</span>
+              <code th:if="${d.externalRef != null}" th:text="${d.externalRef}">ref</code>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card">
       <h2>Revisions</h2>
       <ul>
         <li th:each="r : ${revisions}">

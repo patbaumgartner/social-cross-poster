@@ -1,6 +1,7 @@
 package com.patbaumgartner.socialcrossposter.web;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -23,6 +24,9 @@ import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverride;
+import com.patbaumgartner.socialcrossposter.publish.Delivery;
+import com.patbaumgartner.socialcrossposter.publish.Publication;
+import com.patbaumgartner.socialcrossposter.publish.PublicationService;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
@@ -44,12 +48,15 @@ public class ComposeController {
 
 	private final ConnectionService connections;
 
+	private final PublicationService publications;
+
 	public ComposeController(WorkspaceService workspaces, PostService posts, PreviewService previews,
-			ConnectionService connections) {
+			ConnectionService connections, PublicationService publications) {
 		this.workspaces = workspaces;
 		this.posts = posts;
 		this.previews = previews;
 		this.connections = connections;
+		this.publications = publications;
 	}
 
 	/** New-post form (UC-04 step 1/3/5): title, default text, destination selection. */
@@ -114,6 +121,12 @@ public class ComposeController {
 				model.addAttribute("overrides", overrides);
 				model.addAttribute("destinations", this.connections.listDestinations(workspace.id()));
 				model.addAttribute("previews", this.previews.previews(workspace.id(), revision, selected, overrides));
+				List<Publication> pubs = this.publications.publicationsOf(workspace.id(), id);
+				Map<Long, List<Delivery>> deliveriesByPublication = pubs.stream()
+					.collect(Collectors.toMap(Publication::id,
+							(p) -> this.publications.deliveriesOf(workspace.id(), p.id())));
+				model.addAttribute("publications", pubs);
+				model.addAttribute("deliveriesByPublication", deliveriesByPublication);
 				return "post";
 			}
 			catch (PostException ex) {
