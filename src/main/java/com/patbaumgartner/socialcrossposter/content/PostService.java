@@ -104,6 +104,17 @@ public class PostService {
 		return revision;
 	}
 
+	/**
+	 * Renames the post container (title is workspace-local metadata, not revision
+	 * content).
+	 */
+	@Transactional
+	public Post saveRevisionTitle(Post post, String title) {
+		Post saved = new Post(post.id(), post.workspaceId(), title, post.state(), post.currentRevisionId(),
+				post.version() + 1, post.createdAt(), OffsetDateTime.now());
+		return this.posts.save(saved);
+	}
+
 	/** Loads a post fail-closed for another workspace (ADR-013). */
 	public Post requirePost(Long workspaceId, Long postId) {
 		return this.posts.findByIdAndWorkspaceId(postId, workspaceId)

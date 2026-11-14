@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <!-- UC-04 preview fragment: one entry per selected destination. Shows the effective
+       text after override precedence (destination -> platform -> default), the platform
+       counter against its limit, blockers (over-limit / explicit clear — never truncated,
+       ADR-003 point 3) and the resolved mentions with their status. -->
+  <ul th:fragment="previews" class="previews">
+    <li th:if="${previews.isEmpty()}"><em>No destinations selected — nothing to preview.</em></li>
+    <li th:each="p : ${previews}" th:classappend="${p.overLimit or !p.blockers.isEmpty()} ? 'blocked'">
+      <header>
+        <strong th:text="${p.destination.platform + ' · ' + p.destination.label}">telegram · My channel</strong>
+        <span th:if="${p.destination.host != null and !#strings.isEmpty(p.destination.host)}"
+              th:text="'@' + ${p.destination.host}">@host</span>
+        <span class="badge" th:if="${p.overLimit}">over limit</span>
+        <span class="badge ok" th:if="${!p.overLimit and p.blockers.isEmpty()}">ok</span>
+      </header>
+      <pre th:text="${p.effectiveText}">effective text</pre>
+      <small th:text="${p.textLength} + ' / ' + ${p.maxTextLength} + ' characters'">0 / 4096 characters</small>
+      <ul class="blockers">
+        <li th:each="b : ${p.blockers}" th:text="${b}">blocker</li>
+      </ul>
+      <ul class="mentions" th:if="${!p.mentions.isEmpty()}">
+        <li th:each="m : ${p.mentions}">
+          <span class="badge" th:text="${m.status}">NATIVE</span>
+          <code th:text="${m.rawToken}">{{contact:…}}</code> →
+          <span th:text="${m.renderedText}">@alice</span>
+          <small th:text="${m.note}">note</small>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</body>
+</html>

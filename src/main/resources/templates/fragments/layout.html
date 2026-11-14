@@ -17,6 +17,8 @@
           th:text="${workspace.label}">Workspace</span>
     <a th:if="${workspace != null}" th:href="@{/w/{slug}/accounts(slug=${workspace.slug})}">Accounts</a>
     <a th:if="${workspace != null}" th:href="@{/w/{slug}/contacts(slug=${workspace.slug})}">Contacts</a>
+    <a th:if="${workspace != null}" th:href="@{/w/{slug}/posts(slug=${workspace.slug})}">Posts</a>
+    <a th:if="${workspace != null}" th:href="@{/w/{slug}/compose(slug=${workspace.slug})}">Compose</a>
     <form class="logout" method="post" th:action="@{/logout}">
       <button type="submit">Sign out</button>
     </form>
