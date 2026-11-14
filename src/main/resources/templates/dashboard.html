@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Dashboard')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — dashboard'">Dashboard</h1>
+    <p>Workspace <strong th:text="${workspace.slug}">slug</strong> · timezone
+      <span th:text="${workspace.timezone}">Europe/Zurich</span></p>
+    <p><a th:href="@{/}">&larr; All workspaces</a></p>
+  </main>
+</body>
+</html>

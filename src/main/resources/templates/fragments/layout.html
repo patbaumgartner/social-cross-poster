@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="_csrf" th:content="${_csrf.token}">
+  <meta name="_csrf_header" th:content="${_csrf.headerName}">
+  <title th:text="${title} + ' · Social Cross-Poster'">Social Cross-Poster</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/htmx-4.0.1.min.js" defer></script>
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar" th:fragment="topbar">
+    <a class="brand" href="/">Social Cross-Poster</a>
+    <span class="workspace-badge" th:if="${workspace != null}" th:attr="data-ws=${workspace.slug}"
+          th:text="${workspace.label}">Workspace</span>
+    <form class="logout" method="post" th:action="@{/logout}">
+      <button type="submit">Sign out</button>
+    </form>
+  </header>
+</body>
+</html>

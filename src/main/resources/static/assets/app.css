@@ -1,0 +1,157 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f6f7f9;
+  color: #1f2933;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: #111827;
+  color: #f9fafb;
+}
+
+.topbar a {
+  color: #f9fafb;
+  text-decoration: none;
+}
+
+.brand {
+  font-weight: 700;
+}
+
+.workspace-badge {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.workspace-badge[data-ws="private"] { background: #6b7280; }
+.workspace-badge[data-ws="socrates-ch"] { background: #2563eb; }
+.workspace-badge[data-ws="voxxed-days-zurich"] { background: #7c3aed; }
+.workspace-badge[data-ws="voxxed-days-ticino"] { background: #059669; }
+
+.logout {
+  margin-left: auto;
+}
+
+.logout button {
+  background: transparent;
+  color: #f9fafb;
+  border: 1px solid #6b7280;
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+}
+
+.content {
+  max-width: 60rem;
+  margin: 2rem auto;
+  padding: 0 1.25rem;
+}
+
+.content.narrow {
+  max-width: 26rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+
+.field {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #9ca3af;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+button.primary {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 1.1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.alert {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+}
+
+.notice {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+}
+
+.workspace-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+}
+
+.workspace-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.workspace-card:hover {
+  border-color: #2563eb;
+}
+
+.dot {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: #9ca3af;
+  flex: none;
+}
+
+.dot[data-ws="private"] { background: #6b7280; }
+.dot[data-ws="socrates-ch"] { background: #2563eb; }
+.dot[data-ws="voxxed-days-zurich"] { background: #7c3aed; }
+.dot[data-ws="voxxed-days-ticino"] { background: #059669; }
+
+.slug {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 0.85rem;
+}

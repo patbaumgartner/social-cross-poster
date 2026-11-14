@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Workspaces')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1>Choose a workspace</h1>
+    <p>Each workspace owns its accounts, contacts, drafts, media, history, schedules, notifications and AI settings.</p>
+    <ul class="workspace-list">
+      <li th:each="ws : ${workspaces}">
+        <a class="workspace-card" th:href="@{/w/{slug}/dashboard(slug=${ws.slug})}">
+          <span class="dot" th:attr="data-ws=${ws.slug}"></span>
+          <span class="label" th:text="${ws.label}">Label</span>
+          <span class="slug" th:text="${ws.slug}">slug</span>
+        </a>
+      </li>
+    </ul>
+  </main>
+</body>
+</html>
