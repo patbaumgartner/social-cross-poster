@@ -37,6 +37,26 @@ public class MentionResolver {
 		return MentionToken.find(text).stream().map((token) -> resolveOne(workspaceId, platform, token)).toList();
 	}
 
+	/**
+	 * Renders a text for one platform by replacing every mention token with its resolved
+	 * text (native mention when the platform contract verifies one, display-name fallback
+	 * otherwise). Unknown tokens keep their raw text, so execution sends exactly what the
+	 * preview showed — a person is never silently dropped (ADR-003 point 7).
+	 */
+	public String render(Long workspaceId, String text, String platform) {
+		List<MentionToken.TokenOccurrence> occurrences = MentionToken.find(text);
+		if (occurrences.isEmpty()) {
+			return text;
+		}
+		List<MentionMatch> matches = resolve(workspaceId, text, platform);
+		StringBuilder rendered = new StringBuilder(text);
+		for (int i = matches.size() - 1; i >= 0; i--) {
+			MentionToken.TokenOccurrence occurrence = occurrences.get(i);
+			rendered.replace(occurrence.start(), occurrence.end(), matches.get(i).renderedText());
+		}
+		return rendered.toString();
+	}
+
 	private MentionMatch resolveOne(Long workspaceId, String platform, MentionToken.TokenOccurrence token) {
 		Optional<Contact> contact = this.contacts.findByTokenAndWorkspaceId(token.raw(), workspaceId);
 		if (contact.isEmpty()) {
