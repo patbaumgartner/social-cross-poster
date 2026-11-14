@@ -12,9 +12,9 @@ import org.springframework.data.relational.core.mapping.Table;
  * version bumped on every save; content itself lives only in {@link PostRevision}.
  */
 @Table("post")
-public record Post(@Id @Column("id") Long id, @Column("workspace_id") Long workspaceId,
-		@Column("title") String title, @Column("state") String state,
-		@Column("current_revision_id") Long currentRevisionId, @Column("version") long version,
-		@Column("created_at") OffsetDateTime createdAt, @Column("updated_at") OffsetDateTime updatedAt) {
+public record Post(@Id @Column("id") Long id, @Column("workspace_id") Long workspaceId, @Column("title") String title,
+		@Column("state") String state, @Column("current_revision_id") Long currentRevisionId,
+		@Column("version") long version, @Column("created_at") OffsetDateTime createdAt,
+		@Column("updated_at") OffsetDateTime updatedAt) {
 
 }

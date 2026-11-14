@@ -13,7 +13,10 @@ public interface PostRepository extends CrudRepository<Post, Long> {
 
 	Optional<Post> findByIdAndWorkspaceId(Long id, Long workspaceId);
 
-	/** Test/maintenance helper: clears the revision pointer before deleting revisions (FK). */
+	/**
+	 * Test/maintenance helper: clears the revision pointer before deleting revisions
+	 * (FK).
+	 */
 	@Modifying
 	@Query("UPDATE post SET current_revision_id = NULL")
 	void clearCurrentRevisionPointers();

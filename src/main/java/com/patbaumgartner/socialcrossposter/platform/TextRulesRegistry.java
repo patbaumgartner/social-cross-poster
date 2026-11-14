@@ -15,7 +15,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class TextRulesRegistry {
 
-	/** Conservative fallback when a platform has no wired rules yet (UC-04 first slice). */
+	/**
+	 * Conservative fallback when a platform has no wired rules yet (UC-04 first slice).
+	 */
 	public static final int DEFAULT_MAX_TEXT_LENGTH = 4096;
 
 	private final List<TextRules> rules;

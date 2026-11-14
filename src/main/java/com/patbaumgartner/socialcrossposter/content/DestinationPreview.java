@@ -14,7 +14,7 @@ import com.patbaumgartner.socialcrossposter.contacts.MentionMatch;
  * {@code TextRules}, and an over-limit text is a blocker — the preview never truncates
  * (ADR-003 point 3).
  */
-public record DestinationPreview(AccountDestination destination, String effectiveText, int textLength, int maxTextLength,
-		boolean overLimit, List<MentionMatch> mentions, List<String> blockers) {
+public record DestinationPreview(AccountDestination destination, String effectiveText, int textLength,
+		int maxTextLength, boolean overLimit, List<MentionMatch> mentions, List<String> blockers) {
 
 }

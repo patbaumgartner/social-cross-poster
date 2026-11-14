@@ -8,9 +8,9 @@ import org.springframework.data.relational.core.mapping.Table;
 
 /**
  * One layered text override of a revision (ADR-003 point 1). {@code target} is
- * {@code platform:<platformKey>} or {@code destination:<accountId>}. A {@code null}
- * text means the override is absent (inherit from the next layer); an empty string is
- * an explicit clear, which is validated (blocking) instead of silently inherited.
+ * {@code platform:<platformKey>} or {@code destination:<accountId>}. A {@code null} text
+ * means the override is absent (inherit from the next layer); an empty string is an
+ * explicit clear, which is validated (blocking) instead of silently inherited.
  */
 @Table("revision_override")
 public record RevisionOverride(@Id @Column("id") Long id, @Column("workspace_id") Long workspaceId,

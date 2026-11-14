@@ -20,8 +20,8 @@ import com.patbaumgartner.socialcrossposter.platform.TextRulesRegistry;
  * same deterministic adapters as execution: override precedence destination → platform →
  * default, mention resolution via {@link MentionResolver}, and the platform's
  * {@link TextRules} for the counter. Over-limit or explicitly cleared text becomes a
- * blocker — the preview never silently truncates, splits, or drops content (ADR-003
- * point 3). All lookups are workspace-scoped and fail closed for foreign ids (ADR-013).
+ * blocker — the preview never silently truncates, splits, or drops content (ADR-003 point
+ * 3). All lookups are workspace-scoped and fail closed for foreign ids (ADR-013).
  */
 @Service
 public class PreviewService {
@@ -40,8 +40,8 @@ public class PreviewService {
 
 	/**
 	 * Resolves the effective text for one destination of a revision: destination override
-	 * (NULL = inherit, "" = explicit clear) wins over the platform override, which wins over
-	 * the revision default text.
+	 * (NULL = inherit, "" = explicit clear) wins over the platform override, which wins
+	 * over the revision default text.
 	 */
 	public String resolveText(Long workspaceId, PostRevision revision, Long accountId,
 			Map<String, RevisionOverride> overridesByTarget) {
@@ -100,9 +100,7 @@ public class PreviewService {
 	/** Builds previews for every selected destination of a revision. */
 	public List<DestinationPreview> previews(Long workspaceId, PostRevision revision,
 			List<RevisionDestination> destinations, List<RevisionOverride> overrides) {
-		return destinations.stream()
-			.map((d) -> preview(workspaceId, revision, d.accountId(), overrides))
-			.toList();
+		return destinations.stream().map((d) -> preview(workspaceId, revision, d.accountId(), overrides)).toList();
 	}
 
 }
