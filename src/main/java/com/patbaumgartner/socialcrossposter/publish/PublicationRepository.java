@@ -13,4 +13,6 @@ public interface PublicationRepository extends CrudRepository<Publication, Long>
 
 	List<Publication> findAllByWorkspaceIdAndPostIdOrderByIdDesc(Long workspaceId, Long postId);
 
+	List<Publication> findAllByWorkspaceIdOrderByIdDesc(Long workspaceId);
+
 }
