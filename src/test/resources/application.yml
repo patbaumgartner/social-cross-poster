@@ -1,0 +1,25 @@
+# Test configuration: H2 in PostgreSQL compatibility mode stands in for the
+# private PostgreSQL sidecar (ADR-009); the V1 migration runs unchanged.
+spring:
+  application:
+    name: social-cross-poster
+  datasource:
+    url: jdbc:h2:mem:scp;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  flyway:
+    enabled: true
+
+server:
+  port: 0
+
+management:
+  server:
+    port: 0
+
+app:
+  user: owner
+  # Adaptive bcrypt hash of the test password "test-password" (ADR-005).
+  password-hash: "{bcrypt}$2a$10$NrJkt.2xf9UUXu./c2TPsueOS0IHRiyB3JR62nmS3MNua3sNa9FG6"
+  base-url: http://localhost:8080
