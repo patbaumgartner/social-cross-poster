@@ -69,7 +69,8 @@ public class PostService {
 	@Transactional
 	public Post createPost(Long workspaceId, String title, String defaultText, Set<Long> accountIds,
 			List<RevisionOverride> overrideRequests) {
-		Post post = this.posts.save(new Post(null, workspaceId, title, STATE_DRAFT, null, 0L, null, null));
+		OffsetDateTime now = OffsetDateTime.now();
+		Post post = this.posts.save(new Post(null, workspaceId, title, STATE_DRAFT, null, 0L, now, now));
 		PostRevision revision = saveRevision(post, defaultText, accountIds, overrideRequests);
 		Post saved = new Post(post.id(), post.workspaceId(), post.title(), post.state(), revision.id(),
 				post.version() + 1, post.createdAt(), OffsetDateTime.now());
@@ -87,14 +88,15 @@ public class PostService {
 		int nextNo = current == null ? 1 : current.revisionNo() + 1;
 		validateDestinations(post.workspaceId(), accountIds);
 		List<RevisionOverride> validated = validateOverrides(post.workspaceId(), accountIds, overrideRequests);
+		OffsetDateTime now = OffsetDateTime.now();
 		PostRevision revision = this.revisions
-			.save(new PostRevision(null, post.workspaceId(), post.id(), nextNo, defaultText, null));
+			.save(new PostRevision(null, post.workspaceId(), post.id(), nextNo, defaultText, now));
 		for (Long accountId : accountIds) {
 			this.destinations.save(new RevisionDestination(null, post.workspaceId(), revision.id(), accountId));
 		}
 		for (RevisionOverride o : validated) {
 			this.overrides
-				.save(new RevisionOverride(null, post.workspaceId(), revision.id(), o.target(), o.text(), null));
+				.save(new RevisionOverride(null, post.workspaceId(), revision.id(), o.target(), o.text(), now));
 		}
 		Post saved = new Post(post.id(), post.workspaceId(), post.title(), post.state(), revision.id(),
 				post.version() + 1, post.createdAt(), OffsetDateTime.now());
