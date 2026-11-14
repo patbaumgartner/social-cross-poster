@@ -12,11 +12,56 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Least privilege: the docs pipeline only reads the repository.
+# Least privilege: contents read for checkout; checks/pull-requests write are
+# needed by the test-reporter action in the java job.
 permissions:
   contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  JAVA_VERSION: "27"
+  MAVEN_OPTS: "-Xmx1024m -XX:+UseG1GC"
 
 jobs:
+  # ── Java / Spring Boot ──────────────────────────────────────────────────────
+  java:
+    name: Java – Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Check code formatting
+        run: ./mvnw spring-javaformat:validate -ntp
+
+      - name: Build, test & verify
+        # Tests run on H2 in PostgreSQL mode, so no Docker daemon is required.
+        run: ./mvnw clean verify -ntp
+        env:
+          MAVEN_OPTS: ${{ env.MAVEN_OPTS }}
+
+      - name: Publish test results
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
+        if: always()
+        with:
+          name: "Test Results – Java ${{ env.JAVA_VERSION }}"
+          path: "target/surefire-reports/*.xml"
+          reporter: java-junit
+          fail-on-error: true
+
+  # ── Docs ────────────────────────────────────────────────────────────────────
   docs:
     name: Docs – consistency & lint
     runs-on: ubuntu-latest
