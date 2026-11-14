@@ -1,7 +1,25 @@
 version: 2
 updates:
+  # Application dependencies (pom.xml at the root).
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Zurich
+    open-pull-requests-limit: 10
+    reviewers:
+      - patbaumgartner
+    assignees:
+      - patbaumgartner
+    commit-message:
+      prefix: deps(maven)
+      include: scope
+    labels:
+      - dependencies
+      - maven
   # Docs lint tooling (package.json / package-lock.json at the root).
-  # A maven ecosystem entry is added when the application scaffolding lands.
   - package-ecosystem: npm
     directory: /
     schedule:
