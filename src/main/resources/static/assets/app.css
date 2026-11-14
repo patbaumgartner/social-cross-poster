@@ -155,3 +155,57 @@ button.primary {
   color: #6b7280;
   font-size: 0.85rem;
 }
+
+section.card {
+  margin-bottom: 1.5rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: top;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.actions form {
+  margin: 0;
+}
+
+.actions button,
+details button {
+  background: #fff;
+  border: 1px solid #9ca3af;
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+details form {
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+details input {
+  flex: 1;
+}

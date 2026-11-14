@@ -10,7 +10,7 @@
 - [ ] Documentation addition (new use case, ADR, arc42 section)
 - [ ] Architecture decision change (amends an ADR — describe the amendment)
 - [ ] Repository tooling (CI, hooks, templates)
-- [ ] Code (P0 scaffolding + UC-01 are in; UC-02…UC-16 follow the plan)
+- [ ] Code (P0 scaffolding + UC-01 + UC-02 first slice are in; the rest of UC-02…UC-16 follows the plan)
 
 ## Affected documents
 
@@ -22,7 +22,7 @@
 - [ ] `npx markdownlint-cli2 "**/*.md"` passes
 - [ ] `./mvnw clean verify` passes (Java build, formatting, tests)
 - [ ] Related use cases / ADRs / arc42 sections were updated where behavior changed
-- [ ] Implemented-behavior claims match reality (only scaffolding + UC-01 are implemented as of 2026-11-14)
+- [ ] Implemented-behavior claims match reality (as of 2026-11-14: scaffolding + UC-01 + UC-02 first slice only)
 
 ## License
 

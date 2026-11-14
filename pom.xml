@@ -46,6 +46,13 @@
       <artifactId>spring-boot-starter-security</artifactId>
     </dependency>
 
+    <!-- ── HTTP client for provider probes (Boot 4 moved the RestClient
+          auto-configuration into this starter; ADR-001 platform adapters) ── -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-restclient</artifactId>
+    </dependency>
+
     <!-- ── Persistence (PostgreSQL + Flyway, ADR-009) ─────────────── -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

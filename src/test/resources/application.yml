@@ -23,3 +23,8 @@ app:
   # Adaptive bcrypt hash of the test password "test-password" (ADR-005).
   password-hash: "{bcrypt}$2a$10$NrJkt.2xf9UUXu./c2TPsueOS0IHRiyB3JR62nmS3MNua3sNa9FG6"
   base-url: http://localhost:8080
+  secrets:
+    # Test-only AES-256 key (32 bytes, base64) for the ADR-007 cipher. Never
+    # used outside tests.
+    key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    key-id: test-v1

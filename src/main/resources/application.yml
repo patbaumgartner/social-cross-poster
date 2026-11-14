@@ -36,3 +36,8 @@ app:
   base-url: ${APP_BASE_URL:http://localhost:8080}
   # APP_USER / APP_PASSWORD_HASH are intentionally not defaulted here: missing
   # owner credentials fail startup closed (ADR-005).
+  # APP_SECRETS_KEY (base64, 32 bytes, AES-256) and APP_SECRETS_KEY_ID (default
+  # "v1") likewise have no default: workspace secrets cannot be encrypted or
+  # decrypted without an externally supplied versioned key, so startup fails
+  # closed without them (ADR-007). The key is supplied via the protected
+  # environment/secret files, never stored in the database or this file.

@@ -7,6 +7,7 @@
     <h1 th:text="${workspace.label} + ' — dashboard'">Dashboard</h1>
     <p>Workspace <strong th:text="${workspace.slug}">slug</strong> · timezone
       <span th:text="${workspace.timezone}">Europe/Zurich</span></p>
+    <p><a th:href="@{/w/{slug}/accounts(slug=${workspace.slug})}">Accounts &amp; destinations (UC-02)</a></p>
     <p><a th:href="@{/}">&larr; All workspaces</a></p>
   </main>
 </body>

@@ -21,6 +21,10 @@ services:
       # Fail-closed owner login (ADR-005): no defaults, see .env.example.
       APP_USER: ${APP_USER}
       APP_PASSWORD_HASH: ${APP_PASSWORD_HASH}
+      # Fail-closed secret encryption key (ADR-007): the key itself is passed
+      # via the protected environment, never stored in the database.
+      APP_SECRETS_KEY: ${APP_SECRETS_KEY}
+      APP_SECRETS_KEY_ID: ${APP_SECRETS_KEY_ID:-v1}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
     ports:
       # Loopback only: single-owner app behind a TLS-terminating reverse proxy.
