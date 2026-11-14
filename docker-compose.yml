@@ -1,0 +1,56 @@
+# Baseline deployment (ADR-009, ADR-012): the app plus a private PostgreSQL
+# sidecar on a shared compose network. Only the app ports are published, and only
+# on loopback — the management/actuator listener (8081) must stay private.
+#
+#   cp .env.example .env   # fill in APP_USER / APP_PASSWORD_HASH / DB_PASSWORD
+#   docker compose up -d
+#
+services:
+
+  app:
+    image: ${SCP_IMAGE:-ghcr.io/patbaumgartner/social-cross-poster:latest}
+    container_name: social-cross-poster
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${DB_NAME:-socialcrossposter}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-socialcrossposter}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      # Fail-closed owner login (ADR-005): no defaults, see .env.example.
+      APP_USER: ${APP_USER}
+      APP_PASSWORD_HASH: ${APP_PASSWORD_HASH}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+    ports:
+      # Loopback only: single-owner app behind a TLS-terminating reverse proxy.
+      - "127.0.0.1:8080:8080"
+      # Loopback only: actuator/health is not behind the owner login (ADR-005).
+      - "127.0.0.1:8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  db:
+    # Pinned by digest so pulls are reproducible and verified (ADR-012).
+    image: postgres:18.7@sha256:9f4fd4aa918f52ae3d6f3b687f1de90d8f867cd4d520021545a9a50c120eae3b
+    container_name: social-cross-poster-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-socialcrossposter}
+      POSTGRES_USER: ${DB_USER:-socialcrossposter}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Private: no host port mapping, reachable only from the compose network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:
