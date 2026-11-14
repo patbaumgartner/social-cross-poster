@@ -1,6 +1,6 @@
 # Use cases
 
-These are planned behaviors; **UC-01 (login + workspace picker) and the first UC-02 slice (telegram/pasted connections, encrypted secrets, manual destinations) are implemented as of 2026-11-14** — see their review logs. All tenant operations require an explicit workspace, including jobs and callbacks. One owner login can manage every v1 workspace. [Plan.md](../../Plan.md) defines delivery phases; [ADR-015](../adr/ADR-015-publication-lifecycle-and-recovery.md) owns delivery states. All 16 use cases were cross-checked against the ADRs on 2026-11-13; each document records the outcome in its review log.
+These are planned behaviors; **UC-01 (login + workspace picker), the first UC-02 slice (telegram/pasted connections, encrypted secrets, manual destinations) and UC-03 (workspace contacts, handles, neutral mention tokens, mention previews) are implemented as of 2026-11-14** — see their review logs. All tenant operations require an explicit workspace, including jobs and callbacks. One owner login can manage every v1 workspace. [Plan.md](../../Plan.md) defines delivery phases; [ADR-015](../adr/ADR-015-publication-lifecycle-and-recovery.md) owns delivery states. All 16 use cases were cross-checked against the ADRs on 2026-11-13; each document records the outcome in its review log.
 
 | Use case | Behavior |
 |---|---|

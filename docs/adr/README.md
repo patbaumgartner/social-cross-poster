@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Design baseline reviewed 2026-11-13. Existing records were amended before implementation; “Accepted” is a design decision, not a shipped feature. ADR-010 accepts a feasibility policy. As of 2026-11-14 the P0 scaffolding, UC-01 and the first UC-02 slice are implemented (ADR-005 login, ADR-006 telegram/pasted probe, ADR-007 AES-256-GCM secret cipher, ADR-009 schema via Flyway V1+V2, ADR-012 Compose baseline, ADR-013 workspace table + tenancy); the remaining ADRs describe planned behavior. [Plan.md](../../Plan.md) owns delivery gates; [technology baseline](../technologies.md) owns exact latest stable versions.
+Design baseline reviewed 2026-11-13. Existing records were amended before implementation; “Accepted” is a design decision, not a shipped feature. ADR-010 accepts a feasibility policy. As of 2026-11-14 the P0 scaffolding, UC-01, the first UC-02 slice and UC-03 are implemented (ADR-005 login, ADR-006 telegram/pasted probe, ADR-007 AES-256-GCM secret cipher, ADR-009 schema via Flyway V1–V3, ADR-012 Compose baseline, ADR-013 workspace table + tenancy, ADR-003 points 5–6 contacts/handles/neutral mention tokens/verified mention contracts); the remaining ADRs describe planned behavior. [Plan.md](../../Plan.md) owns delivery gates; [technology baseline](../technologies.md) owns exact latest stable versions.
 
 | ADR | Decision |
 |---|---|

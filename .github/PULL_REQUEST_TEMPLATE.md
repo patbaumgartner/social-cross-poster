@@ -22,7 +22,7 @@
 - [ ] `npx markdownlint-cli2 "**/*.md"` passes
 - [ ] `./mvnw clean verify` passes (Java build, formatting, tests)
 - [ ] Related use cases / ADRs / arc42 sections were updated where behavior changed
-- [ ] Implemented-behavior claims match reality (as of 2026-11-14: scaffolding + UC-01 + UC-02 first slice only)
+- [ ] Implemented-behavior claims match reality (as of 2026-11-14: scaffolding + UC-01 + UC-02 first slice + UC-03 only)
 
 ## License
 

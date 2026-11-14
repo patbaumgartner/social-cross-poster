@@ -42,10 +42,10 @@ code** are welcome.
   `git config core.hooksPath .githooks`).
 
 - Distinguish **implemented behavior** from **planned/candidate** behavior.
-  As of 2026-11-14 the P0 scaffolding, UC-01 (login + workspace picker) and the
+  As of 2026-11-14 the P0 scaffolding, UC-01 (login + workspace picker), the
   first UC-02 slice (connections/destinations + encrypted secrets, telegram
-  pasted only) are implemented; the rest of UC-02…UC-16 remains planned. Do not
-  claim more.
+  pasted only) and UC-03 (contacts, handles, mention tokens + previews) are
+  implemented; the rest of UC-02…UC-16 remains planned. Do not claim more.
 - External links must be dated and sourced where they record a verification
   (see `docs/technologies.md` and `docs/platforms/README.md`).
 

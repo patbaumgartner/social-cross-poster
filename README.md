@@ -7,7 +7,7 @@
 
 A planned self-hosted application for writing, reviewing, and publishing content across several brands and social accounts. Inspired by [crosspost](https://github.com/humanwhocodes/crosspost), with a browser UI and a Docker Compose deployment for a NAS.
 
-**Status: P0 scaffolding landed 2026-11-14 — the application builds and runs, [UC-01 (login + workspace picker)](docs/usecases/UC-01-login.md) is implemented and tested, and the first slice of [UC-02 (accounts)](docs/usecases/UC-02-manage-accounts.md) (telegram/pasted connections with AES-256-GCM-encrypted secrets + manual destinations) is in.** The rest of UC-02…UC-16 is still design only. A Compose baseline (`docker-compose.yml`, app + private PostgreSQL) exists, but no release image is published yet, so there is no packaged quick start.
+**Status: P0 scaffolding landed 2026-11-14 — the application builds and runs, [UC-01 (login + workspace picker)](docs/usecases/UC-01-login.md) is implemented and tested, the first slice of [UC-02 (accounts)](docs/usecases/UC-02-manage-accounts.md) (telegram/pasted connections with AES-256-GCM-encrypted secrets + manual destinations) is in, and [UC-03 (contacts)](docs/usecases/UC-03-manage-contacts.md) (workspace contacts, platform handles, neutral mention tokens, @-autocomplete, per-platform mention previews) is implemented.** The rest of UC-02…UC-16 is still design only. A Compose baseline (`docker-compose.yml`, app + private PostgreSQL) exists, but no release image is published yet, so there is no packaged quick start.
 
 ## One owner per installation, several account sets
 

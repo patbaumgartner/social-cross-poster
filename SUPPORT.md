@@ -3,9 +3,9 @@
 ## Status of this project
 
 Social Cross-Poster is a **design and documentation baseline with the P0
-scaffolding, UC-01 (login + workspace picker) and the first UC-02 slice
-(telegram/pasted connections, encrypted secrets, destinations) implemented**
-(2026-11-14).
+scaffolding, UC-01 (login + workspace picker), the first UC-02 slice
+(telegram/pasted connections, encrypted secrets, destinations) and UC-03
+(contacts, handles, mention tokens + previews) implemented** (2026-11-14).
 There is a Compose baseline (`docker-compose.yml`) but no published release
 image yet — see the [README](README.md) status note and [Plan.md](Plan.md) for
 the delivery roadmap and acceptance gates.
