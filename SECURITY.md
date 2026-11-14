@@ -15,12 +15,15 @@ will be published for the affected versions.
 ## Scope
 
 This repository contains the design documentation plus the P0 scaffolding,
-[UC-01 (login)](docs/usecases/UC-01-login.md) and the first [UC-02
-slice](docs/usecases/UC-02-manage-accounts.md) (encrypted provider secrets)
-implemented on 2026-11-14 — the application exists and handles the owner
-password hash and AES-256-GCM-sealed provider secrets, but there is no
-released application or published deployment image yet. Security requirements
-for the application are specified in:
+[UC-01 (login)](docs/usecases/UC-01-login.md), the first [UC-02
+slice](docs/usecases/UC-02-manage-accounts.md) (encrypted provider secrets) and
+[UC-03 (contacts)](docs/usecases/UC-03-manage-contacts.md) (workspace contacts,
+handles, mention tokens) implemented on 2026-11-14 — the application exists and
+handles the owner password hash, AES-256-GCM-sealed provider secrets, and
+workspace-local contact data (photos stored as `data:` URIs only, never fetched
+from external URLs; private notes never sent to providers or AI by default), but
+there is no released application or published deployment image yet. Security
+requirements for the application are specified in:
 
 - [ADR-005 — one owner login with workspace authorization](docs/adr/ADR-005-single-user-built-in-login.md) (authentication, session, CSRF, public-route contracts)
 - [ADR-007 — encrypted workspace secrets with externally supplied keys](docs/adr/ADR-007-secrets-in-env-on-volume.md) (secret storage, redaction, key rotation)
@@ -41,8 +44,8 @@ NAS itself is the operator's responsibility.
 | Any released application version | See GitHub releases / security advisories |
 
 No application release exists yet, so only the current `main` baseline
-(scaffolding + UC-01 + UC-02 first slice) is maintained; released application versions will be
-listed here once published.
+(scaffolding + UC-01 + UC-02 first slice + UC-03) is maintained; released
+application versions will be listed here once published.
 
 ## Security-relevant configuration
 

@@ -1,6 +1,6 @@
 # ADR-003 — Layered overrides and reviewed destination payloads
 
-- **Status:** Accepted; amended during the pre-implementation review
+- **Status:** Accepted; amended during the pre-implementation review; points 5–6 partially implemented 2026-11-14 (UC-03 first slice: workspace contacts/handles, neutral mention tokens, telegram mention contract + visible fallback)
 - **Date:** 2026-11-13
 
 ## Context
