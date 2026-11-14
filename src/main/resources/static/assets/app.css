@@ -113,6 +113,21 @@ button.primary {
   border-radius: 6px;
 }
 
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
 .workspace-list {
   list-style: none;
   padding: 0;
