@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Publish')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — Publish'">Publish</h1>
+    <p><a th:href="@{/w/{slug}/posts/{id}(slug=${workspace.slug},id=${post.id})}">&larr; Back to post</a></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+
+    <section class="card">
+      <h2>Confirm publication <small>revision <span th:text="${revision.revisionNo}">1</span></small></h2>
+      <p th:if="${blockers.isEmpty()}">All destination previews are clear. Publishing binds this revision to the
+        submission key below and sends one immutable, mention-resolved payload per selected destination now
+        (UC-05, ADR-015). Resubmitting the same key with the same content returns the existing publication.</p>
+      <div th:if="${!blockers.isEmpty()}">
+        <p class="alert" role="alert">Publishing is blocked — resolve these first (the payload is never truncated or altered):</p>
+        <ul>
+          <li th:each="b : ${blockers}" th:text="${b}">blocker</li>
+        </ul>
+      </div>
+
+      <p th:if="${previews.isEmpty()}"><em>No destinations selected on this revision — nothing to publish (UC-04 step 3).</em></p>
+      <div th:each="p : ${previews}" class="card">
+        <h3 th:text="${p.destination.platform + ' · ' + p.destination.label + (p.destination.host != null and !#strings.isEmpty(p.destination.host) ? ' @' + p.destination.host : '')}">destination</h3>
+        <p><span th:text="${p.textLength}">0</span> / <span th:text="${p.maxTextLength}">4096</span> characters
+          <span class="badge" th:if="${p.overLimit}">over limit</span></p>
+        <pre th:text="${p.effectiveText}">text</pre>
+        <ul th:if="${!p.mentions.isEmpty()}">
+          <li th:each="m : ${p.mentions}"><code th:text="${m.rawToken}">token</code> &rarr;
+            <span th:text="${m.renderedText}">rendered</span> <small th:text="${m.status}">NATIVE</small></li>
+        </ul>
+      </div>
+
+      <form method="post" th:action="@{/w/{slug}/posts/{id}/publish(slug=${workspace.slug},id=${post.id})}">
+        <input type="hidden" name="submissionKey" th:value="${submissionKey}">
+        <button class="primary" type="submit" th:disabled="${!blockers.isEmpty() or previews.isEmpty()}">Publish now</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

@@ -297,6 +297,10 @@ public class PublicationService {
 			.orElseThrow(() -> new PublicationException("Unknown publication for this workspace."));
 	}
 
+	public Optional<Publication> findBySubmissionKey(Long workspaceId, String submissionKey) {
+		return this.publications.findByWorkspaceIdAndSubmissionKey(workspaceId, submissionKey);
+	}
+
 	public List<Publication> publicationsOf(Long workspaceId, Long postId) {
 		this.posts.requirePost(workspaceId, postId);
 		return this.publications.findAllByWorkspaceIdAndPostIdOrderByIdDesc(workspaceId, postId);
