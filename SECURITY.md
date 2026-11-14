@@ -14,9 +14,11 @@ will be published for the affected versions.
 
 ## Scope
 
-This repository contains the design documentation plus the P0 scaffolding and
-[UC-01 (login)](docs/usecases/UC-01-login.md) implemented on 2026-11-14 — the
-application exists and handles the owner password hash, but there is no
+This repository contains the design documentation plus the P0 scaffolding,
+[UC-01 (login)](docs/usecases/UC-01-login.md) and the first [UC-02
+slice](docs/usecases/UC-02-manage-accounts.md) (encrypted provider secrets)
+implemented on 2026-11-14 — the application exists and handles the owner
+password hash and AES-256-GCM-sealed provider secrets, but there is no
 released application or published deployment image yet. Security requirements
 for the application are specified in:
 
@@ -39,7 +41,7 @@ NAS itself is the operator's responsibility.
 | Any released application version | See GitHub releases / security advisories |
 
 No application release exists yet, so only the current `main` baseline
-(scaffolding + UC-01) is maintained; released application versions will be
+(scaffolding + UC-01 + UC-02 first slice) is maintained; released application versions will be
 listed here once published.
 
 ## Security-relevant configuration

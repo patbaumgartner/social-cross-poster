@@ -1,6 +1,6 @@
 # ADR-006 — Provider-specific OAuth and pasted credentials per connection
 
-- **Status:** Accepted; amended during the pre-implementation review
+- **Status:** Accepted; amended during the pre-implementation review; telegram/pasted flow implemented 2026-11-14 (OAuth pending)
 - **Date:** 2026-11-13
 
 ## Context

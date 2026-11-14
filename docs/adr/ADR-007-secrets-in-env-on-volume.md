@@ -1,6 +1,6 @@
 # ADR-007 — Encrypted workspace secrets with externally supplied keys
 
-- **Status:** Accepted; replaces the pre-implementation plaintext-DB/deferred-encryption sketch
+- **Status:** Accepted; replaces the pre-implementation plaintext-DB/deferred-encryption sketch; AES-256-GCM cipher with env-supplied versioned key implemented 2026-11-14
 - **Date:** 2026-11-13
 
 ## Context
