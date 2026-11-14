@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Posts')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — posts'">Posts</h1>
+    <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Dashboard</a>
+       · <a th:href="@{/w/{slug}/compose(slug=${workspace.slug})}">+ New post</a></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p class="notice" role="status" th:if="${notice}" th:text="${notice}">Notice</p>
+
+    <section class="card">
+      <h2>Drafts</h2>
+      <p th:if="${posts.isEmpty()}">No posts yet — <a th:href="@{/w/{slug}/compose(slug=${workspace.slug})}">compose the first one</a>.</p>
+      <ul th:if="${!posts.isEmpty()}">
+        <li th:each="p : ${posts}">
+          <a th:href="@{/w/{slug}/posts/{id}(slug=${workspace.slug},id=${p.id})}"
+             th:text="${p.title != null and !#strings.isEmpty(p.title) ? p.title : 'Post #' + p.id}">Post</a>
+          <span class="badge" th:text="${p.state}">DRAFT</span>
+          <span th:if="${p.currentRevisionId != null}" th:text="'rev → ' + ${p.currentRevisionId}">rev</span>
+          <small th:text="'updated ' + ${p.updatedAt}">updated</small>
+        </li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

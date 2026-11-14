@@ -1,6 +1,6 @@
 # ADR-003 — Layered overrides and reviewed destination payloads
 
-- **Status:** Accepted; amended during the pre-implementation review; points 5–6 partially implemented 2026-11-14 (UC-03 first slice: workspace contacts/handles, neutral mention tokens, telegram mention contract + visible fallback)
+- **Status:** Accepted; amended during the pre-implementation review; points 1–3 and 5–6 partially implemented 2026-11-14 (UC-03 first slice: workspace contacts/handles, neutral mention tokens, telegram mention contract + visible fallback; UC-04 first slice: immutable revisions with layered destination/platform/default overrides, per-destination previews using the same deterministic adapters — platform text rules, mention resolver, over-limit/explicit-clear blockers, never truncating)
 - **Date:** 2026-11-13
 
 ## Context

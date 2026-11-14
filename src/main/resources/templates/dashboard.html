@@ -9,6 +9,8 @@
       <span th:text="${workspace.timezone}">Europe/Zurich</span></p>
     <p><a th:href="@{/w/{slug}/accounts(slug=${workspace.slug})}">Accounts &amp; destinations (UC-02)</a></p>
     <p><a th:href="@{/w/{slug}/contacts(slug=${workspace.slug})}">Contacts &amp; mentions (UC-03)</a></p>
+    <p><a th:href="@{/w/{slug}/posts(slug=${workspace.slug})}">Posts &amp; compose (UC-04)</a> ·
+       <a th:href="@{/w/{slug}/compose(slug=${workspace.slug})}">+ New post</a></p>
     <p><a th:href="@{/}">&larr; All workspaces</a></p>
   </main>
 </body>

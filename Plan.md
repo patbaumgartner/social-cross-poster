@@ -1,6 +1,6 @@
 # Plan — Social Cross-Poster
 
-**State:** reviewed 2026-11-13; P0 scaffolding, UC-01 (login + workspace picker), the first UC-02 slice (workspace-scoped connections/destinations, encrypted secrets, telegram/pasted probe) and UC-03 (workspace contacts, handles, neutral mention tokens + mention previews) implemented 2026-11-14 — see the [UC-01](docs/usecases/UC-01-login.md), [UC-02](docs/usecases/UC-02-manage-accounts.md) and [UC-03](docs/usecases/UC-03-manage-contacts.md) review logs. The remaining features and acceptance gates below are planned; no provider access is certified.
+**State:** reviewed 2026-11-13; P0 scaffolding, UC-01 (login + workspace picker), the first UC-02 slice (workspace-scoped connections/destinations, encrypted secrets, telegram/pasted probe), UC-03 (workspace contacts, handles, neutral mention tokens + mention previews) and the first UC-04 slice (immutable revisions, destination selection, per-destination previews) implemented 2026-11-14 — see the [UC-01](docs/usecases/UC-01-login.md), [UC-02](docs/usecases/UC-02-manage-accounts.md), [UC-03](docs/usecases/UC-03-manage-contacts.md) and [UC-04](docs/usecases/UC-04-compose-post.md) review logs. The remaining features and acceptance gates below are planned; no provider access is certified.
 
 Source: [patbaumgartner/social-cross-poster](https://github.com/patbaumgartner/social-cross-poster). Follow the [latest-stable technology inventory and Buildpacks-first policy](docs/technologies.md).
 

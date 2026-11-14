@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Post')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — ' + (${post.title} != null ? ${post.title} : 'Post #' + ${post.id})">Post</h1>
+    <p><a th:href="@{/w/{slug}/posts(slug=${workspace.slug})}">&larr; Posts</a></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p class="notice" role="status" th:if="${notice}" th:text="${notice}">Notice</p>
+
+    <section class="card">
+      <h2>Edit <span class="badge" th:text="${post.state}">DRAFT</span>
+        <small th:text="'current revision #' + ${revision.revisionNo}">rev</small></h2>
+      <p>Saving creates a new immutable revision — existing revisions are never modified
+        (ADR-015). Previews below use the saved revision; use “Refresh preview” to preview
+        unsaved text.</p>
+      <form id="post-form" method="post" th:action="@{/w/{slug}/posts/{id}(slug=${workspace.slug},id=${post.id})}">
+        <div class="field">
+          <label for="title">Title</label>
+          <input id="title" name="title" type="text" maxlength="200" th:value="${post.title}">
+        </div>
+        <div class="field">
+          <label for="text">Default text</label>
+          <textarea id="text" name="text" rows="8" data-mention-composer autocomplete="off"
+                    th:text="${revision.defaultText}"
+                    th:attr="hx-get=@{/w/{slug}/contacts/search(slug=${workspace.slug})}, hx-trigger='keyup changed delay:250ms', hx-target='#mention-results', hx-swap='innerHTML'"></textarea>
+        </div>
+        <div id="mention-results"></div>
+        <fieldset>
+          <legend>Destinations</legend>
+          <p th:if="${destinations.isEmpty()}"><em>No destinations in this workspace yet (UC-02).</em></p>
+          <label th:each="d : ${destinations}">
+            <input type="checkbox" name="accountIds" th:value="${d.id}" th:checked="${selectedIds.contains(d.id)}">
+            <span th:text="${d.platform + ' · ' + d.label + (d.host != null and !#strings.isEmpty(d.host) ? ' @' + d.host : '')}">telegram · My channel</span>
+          </label>
+        </fieldset>
+        <button class="primary" type="submit">Save as new revision</button>
+        <button type="button"
+                th:attr="hx-get=@{/w/{slug}/posts/{id}/preview(slug=${workspace.slug},id=${post.id})}, hx-include='#post-form', hx-target='#previews', hx-swap='innerHTML'">Refresh preview</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Destination previews <small>(revision <span th:text="${revision.revisionNo}">1</span>)</small></h2>
+      <div id="previews" th:replace="~{fragments/post-previews :: previews}"></div>
+    </section>
+
+    <section class="card">
+      <h2>Revisions</h2>
+      <ul>
+        <li th:each="r : ${revisions}">
+          #<span th:text="${r.revisionNo}">1</span> · <small th:text="${r.createdAt}">created</small>
+          <span class="badge" th:if="${r.id == revision.id}">current</span>
+        </li>
+      </ul>
+      <h3>Overrides of the current revision</h3>
+      <p th:if="${overrides.isEmpty()}"><em>No overrides — every destination inherits the default text (ADR-003).</em></p>
+      <ul th:if="${!overrides.isEmpty()}">
+        <li th:each="o : ${overrides}">
+          <code th:text="${o.target}">platform:telegram</code> →
+          <span th:if="${o.text == null}"><em>absent (inherit)</em></span>
+          <span th:if="${o.text != null and !#strings.isEmpty(o.text)}" th:text="${o.text}">text</span>
+          <span th:if="${o.text != null and #strings.isEmpty(o.text)}"><em>explicitly cleared</em></span>
+        </li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
