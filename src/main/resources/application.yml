@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: social-cross-poster
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:socialcrossposter}
+    username: ${DB_USER:socialcrossposter}
+    password: ${DB_PASSWORD:}
+    hikari:
+      # Conservative pooling on a single NAS instance (ADR-009).
+      maximum-pool-size: 5
+  flyway:
+    enabled: true
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+
+server:
+  port: 8080
+  # Forwarded headers are accepted only from configured trusted proxies
+  # (ADR-005); the baseline deployment terminates TLS in front without forwarding.
+  forward-headers-strategy: none
+
+management:
+  # Management/Actuator stays on a separate internal/loopback listener (ADR-005).
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  # Public origin of this installation, used for provider callbacks (ADR-008).
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  # APP_USER / APP_PASSWORD_HASH are intentionally not defaulted here: missing
+  # owner credentials fail startup closed (ADR-005).
