@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.springframework.data.jdbc.repository.query.Modifying;
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface PostRepository extends CrudRepository<Post, Long> {
 
@@ -17,6 +18,7 @@ public interface PostRepository extends CrudRepository<Post, Long> {
 	 * Test/maintenance helper: clears the revision pointer before deleting revisions
 	 * (FK).
 	 */
+	@Transactional
 	@Modifying
 	@Query("UPDATE post SET current_revision_id = NULL")
 	void clearCurrentRevisionPointers();
