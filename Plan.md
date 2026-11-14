@@ -1,6 +1,6 @@
 # Plan — Social Cross-Poster
 
-**State:** design only, reviewed 2026-11-13. Features and acceptance gates below are planned; no implementation or provider access is certified.
+**State:** reviewed 2026-11-13; P0 scaffolding and UC-01 (login + workspace picker) implemented 2026-11-14 (see [UC-01](docs/usecases/UC-01-login.md) review log). The remaining features and acceptance gates below are planned; no provider access is certified.
 
 Source: [patbaumgartner/social-cross-poster](https://github.com/patbaumgartner/social-cross-poster). Follow the [latest-stable technology inventory and Buildpacks-first policy](docs/technologies.md).
 

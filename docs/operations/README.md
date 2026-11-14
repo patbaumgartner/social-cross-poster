@@ -1,6 +1,6 @@
 # Operations and recovery design
 
-**Planning only.** No Compose file, image, backup script, or tested recovery procedure exists yet. Implement and exercise these requirements before a stable release.
+**Planning only, with the Compose baseline landed 2026-11-14.** `docker-compose.yml` (app + private `db`, loopback-only published ports, digest-pinned `postgres:18.7`, `.env.example`) exists and validates with `docker compose config`, but no release image is published yet, and there is no backup script or tested recovery procedure. Implement and exercise the remaining requirements before a stable release.
 
 Source: [patbaumgartner/social-cross-poster](https://github.com/patbaumgartner/social-cross-poster). Versions and Buildpacks policy: [technology baseline](../technologies.md).
 

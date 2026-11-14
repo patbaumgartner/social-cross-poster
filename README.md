@@ -7,7 +7,7 @@
 
 A planned self-hosted application for writing, reviewing, and publishing content across several brands and social accounts. Inspired by [crosspost](https://github.com/humanwhocodes/crosspost), with a browser UI and a Docker Compose deployment for a NAS.
 
-**Status: documentation and design only.** There is no application, Compose file, release image, or runnable quick start yet.
+**Status: P0 scaffolding landed 2026-11-14 — the application builds and runs, and [UC-01 (login + workspace picker)](docs/usecases/UC-01-login.md) is implemented and tested.** The remaining use cases (UC-02…UC-16) are still design only. A Compose baseline (`docker-compose.yml`, app + private PostgreSQL) exists, but no release image is published yet, so there is no packaged quick start.
 
 ## One owner per installation, several account sets
 
@@ -42,6 +42,22 @@ Published images must be stored by the destination platform. The app keeps priva
 Use a Spring Boot/Java monolith with Thymeleaf + HTMX, PostgreSQL, workspace-scoped private storage, and a durable publishing queue. Approved revisions and delivery attempts remain auditable. Credentials are encrypted with keys supplied outside the database. Follow the [latest stable technology baseline](docs/technologies.md) and Cloud Native Buildpacks/Paketo image policy.
 
 Source repository: [patbaumgartner/social-cross-poster](https://github.com/patbaumgartner/social-cross-poster).
+
+## Development
+
+Requires Java 27. The Maven Wrapper is pinned with a checksum.
+
+```sh
+# Fail-closed owner login (ADR-005): generate an adaptive hash, e.g.
+# htpasswd -bnBC 10 "" "your-password" | cut -d: -f2   # -> $2a$10$...
+export APP_USER=owner
+export APP_PASSWORD_HASH='{bcrypt}$2a$10$...'
+./mvnw clean verify        # format check + build + tests (H2 in PostgreSQL mode)
+./mvnw spring-boot:run     # serves :8080; actuator/health on :8081
+```
+
+Deploy baseline (no published image yet): `cp .env.example .env`, fill it in, then
+`docker compose up -d` — see [docs/operations/README.md](docs/operations/README.md).
 
 ## Documentation
 

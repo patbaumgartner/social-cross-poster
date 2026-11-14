@@ -2,10 +2,11 @@
 
 ## Status of this project
 
-Social Cross-Poster is currently a **design and documentation baseline**.
-There is no runnable application, Compose file, or release image yet — see the
-[README](README.md) status note and [Plan.md](Plan.md) for the delivery
-roadmap and acceptance gates.
+Social Cross-Poster is a **design and documentation baseline with the P0
+scaffolding and UC-01 (login + workspace picker) implemented** (2026-11-14).
+There is a Compose baseline (`docker-compose.yml`) but no published release
+image yet — see the [README](README.md) status note and [Plan.md](Plan.md) for
+the delivery roadmap and acceptance gates.
 
 ## Where to ask questions
 

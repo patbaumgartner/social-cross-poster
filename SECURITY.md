@@ -14,9 +14,11 @@ will be published for the affected versions.
 
 ## Scope
 
-This repository currently contains **design documentation only** — there is no
-runnable application, deployment, or credential handling yet. Security
-requirements for the planned application are specified in:
+This repository contains the design documentation plus the P0 scaffolding and
+[UC-01 (login)](docs/usecases/UC-01-login.md) implemented on 2026-11-14 — the
+application exists and handles the owner password hash, but there is no
+released application or published deployment image yet. Security requirements
+for the application are specified in:
 
 - [ADR-005 — one owner login with workspace authorization](docs/adr/ADR-005-single-user-built-in-login.md) (authentication, session, CSRF, public-route contracts)
 - [ADR-007 — encrypted workspace secrets with externally supplied keys](docs/adr/ADR-007-secrets-in-env-on-volume.md) (secret storage, redaction, key rotation)
@@ -36,8 +38,9 @@ NAS itself is the operator's responsibility.
 | Documentation baseline (current `main`) | ✅ |
 | Any released application version | See GitHub releases / security advisories |
 
-No application release exists yet, so only the current documentation baseline
-is maintained.
+No application release exists yet, so only the current `main` baseline
+(scaffolding + UC-01) is maintained; released application versions will be
+listed here once published.
 
 ## Security-relevant configuration
 

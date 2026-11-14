@@ -1,6 +1,6 @@
 # Technology baseline and update policy
 
-**Verified against upstream release pages on 2026-11-13.** This is a planning baseline, not a dependency lockfile or proof that the complete combination builds. Recheck at scaffolding and before each release. Use the latest **stable/GA** releases; exclude snapshots, milestones, release candidates, and early access.
+**Verified against upstream release pages on 2026-11-13; scaffolding resolution verified on 2026-11-14 (see “Scaffolding verification” below).** This is a planning baseline, not a dependency lockfile. Recheck before each release. Use the latest **stable/GA** releases; exclude snapshots, milestones, release candidates, and early access.
 
 Canonical source repository: [patbaumgartner/social-cross-poster](https://github.com/patbaumgartner/social-cross-poster). Planned image location: `ghcr.io/patbaumgartner/social-cross-poster`; no published image is claimed.
 
@@ -41,3 +41,21 @@ Use the Spring Boot Maven plugin's [Cloud Native Buildpacks support](https://doc
 Build/test separately for `linux/amd64` and `linux/arm64`, preferably on native runners. The plugin's image-platform setting selects one platform; it does not create a multi-platform manifest. Combine successfully tested architecture images into one OCI index and record all digests.
 
 No application Dockerfile is planned by default. First select a maintained builder that supplies the required JDK, CA certificates, fonts/image libraries, and architecture. A custom Dockerfile is an exception only after a demonstrated buildpack limitation, with a documented reason and equivalent maintenance/testing requirements. Existing third-party service images are consumed upstream; the app does not rebuild PostgreSQL with buildpacks.
+
+## Scaffolding verification (2026-11-14)
+
+The P0 scaffold was resolved and built on 2026-11-14; `./mvnw clean verify` is green (10/10 tests on H2 in PostgreSQL mode). All artifacts below were verified on Maven Central / upstream with HTTP 200 on 2026-11-14:
+
+| Input | Resolved value | Pin |
+|---|---|---|
+| Spring Boot parent + BOM + plugins | 4.1.2 | `pom.xml` parent version |
+| Java | 27 (27.0.1 BellSoft locally; CI uses Temurin 27) | `maven.compiler.release=27`, `JAVA_VERSION: "27"` in CI |
+| Maven | 3.10.0 | Maven Wrapper `.mvn/wrapper/maven-wrapper.properties`, `distributionSha256Sum=1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff` |
+| Thymeleaf (+ Spring integration) | 3.1.7.RELEASE | **Deliberate override**: Boot 4.1.2 manages 3.1.5.RELEASE; the pom sets `<thymeleaf.version>3.1.7.RELEASE</thymeleaf.version>` per this baseline's latest-stable rule |
+| Flyway core + PostgreSQL module | 13.12.2 | **Deliberate override**: Boot 4.1.2 manages Flyway 12.4.0; the pom sets `<flyway.version>13.12.2</flyway.version>` |
+| spring-javaformat-maven-plugin | 0.0.48 | `pom.xml` build plugin; `validate` runs in `verify` and CI |
+| HTMX | 4.0.1 | Pinned local asset `src/main/resources/static/assets/htmx-4.0.1.min.js`, sha256 `a0abb04f2f45a1f89d1d4844023245537e5e6014c87b144553e0607b4cc32130` (37448 bytes, from the upstream v4.0.1 release) |
+| PostgreSQL image | 18.7 | `docker-compose.yml` pins `postgres:18.7@sha256:9f4fd4aa918f52ae3d6f3b687f1de90d8f867cd4d520021545a9a50c120eae3b` (tag digest from Docker Hub, 2026-11-14) |
+| Image (planned) | `ghcr.io/patbaumgartner/social-cross-poster` | Buildpacks via `spring-boot:build-image`, `BP_JVM_VERSION=27`; **not published yet** |
+
+Spring Boot 4 API drift encountered during scaffolding and resolved: `@AutoConfigureMockMvc` lives in `org.springframework.boot.webmvc.test.autoconfigure` (starter `spring-boot-starter-webmvc-test`), `formLogin()` is `SecurityMockMvcRequestBuilders.formLogin` (Spring Security 7.1.1), and actuator's `EndpointRequest` is `org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest`.

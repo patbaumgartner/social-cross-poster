@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Design baseline reviewed 2026-11-13. Existing records were amended before implementation; “Accepted” is a design decision, not a shipped feature. ADR-010 accepts a feasibility policy. [Plan.md](../../Plan.md) owns delivery gates; [technology baseline](../technologies.md) owns exact latest stable versions.
+Design baseline reviewed 2026-11-13. Existing records were amended before implementation; “Accepted” is a design decision, not a shipped feature. ADR-010 accepts a feasibility policy. As of 2026-11-14 the P0 scaffolding and UC-01 are implemented (ADR-005 login, ADR-009 schema via Flyway, ADR-012 Compose baseline, ADR-013 workspace table); the remaining ADRs describe planned behavior. [Plan.md](../../Plan.md) owns delivery gates; [technology baseline](../technologies.md) owns exact latest stable versions.
 
 | ADR | Decision |
 |---|---|

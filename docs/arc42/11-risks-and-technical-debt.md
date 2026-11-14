@@ -19,6 +19,6 @@
 
 ## Deferred capabilities and implementation gaps
 
-No application is implemented yet; missing tests, setup guides, Compose, encryption, and backup tooling are required implementation work, not completed safeguards. Video/extra formats, workspace-local calendar conveniences, contact import and HA remain later decisions. Shared multi-user/team features, recurring posts, cross-workspace campaigns/copy and permanent public image hosting are excluded.
+The P0 scaffolding and UC-01 (login + workspace picker) are implemented (2026-11-14, 10/10 tests green); UC-02…UC-16, encryption, and backup tooling remain required implementation work, not completed safeguards. The Compose baseline (`docker-compose.yml`, app + private db) exists; setup guides and a published image do not yet. Video/extra formats, workspace-local calendar conveniences, contact import and HA remain later decisions. Shared multi-user/team features, recurring posts, cross-workspace campaigns/copy and permanent public image hosting are excluded.
 
 Exact latest dependency combinations, buildpack runtime/architecture/library support, provider app approvals, and optional bridge operations need implementation evidence. Current candidates and investigation criteria live in the [technology baseline](../technologies.md) and [platform catalog](../platforms/README.md).

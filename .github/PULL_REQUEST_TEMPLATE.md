@@ -10,7 +10,7 @@
 - [ ] Documentation addition (new use case, ADR, arc42 section)
 - [ ] Architecture decision change (amends an ADR — describe the amendment)
 - [ ] Repository tooling (CI, hooks, templates)
-- [ ] Code (not accepted yet — the project is in the design phase)
+- [ ] Code (P0 scaffolding + UC-01 are in; UC-02…UC-16 follow the plan)
 
 ## Affected documents
 
@@ -20,8 +20,9 @@
 
 - [ ] `python3 scripts/check-docs.py` passes (links, anchors, ADR/UC references)
 - [ ] `npx markdownlint-cli2 "**/*.md"` passes
+- [ ] `./mvnw clean verify` passes (Java build, formatting, tests)
 - [ ] Related use cases / ADRs / arc42 sections were updated where behavior changed
-- [ ] No claim of implemented behavior was added (project is design-only)
+- [ ] Implemented-behavior claims match reality (only scaffolding + UC-01 are implemented as of 2026-11-14)
 
 ## License
 

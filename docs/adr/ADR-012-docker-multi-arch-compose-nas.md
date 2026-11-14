@@ -1,6 +1,6 @@
 # ADR-012 — Buildpacks images and one multi-architecture Compose stack
 
-- **Status:** Accepted; amended for latest-stable and Buildpacks requirements
+- **Status:** Accepted; amended for latest-stable and Buildpacks requirements; Compose baseline (`app` + private `db`) added 2026-11-14
 - **Date:** 2026-11-13
 
 ## Context
@@ -24,7 +24,7 @@ The owner's reference installation is a Synology DS918+ with Intel x86_64 CPU an
 
 ## Consequences
 
-One stack hosts multiple logical tenants without claiming process isolation or HA. There is no runnable image, Compose file, or backup script yet. Buildpacks manage packaging; the project still owns version currency, reproducibility, architecture tests, and recovery.
+One stack hosts multiple logical tenants without claiming process isolation or HA. The Compose baseline (`docker-compose.yml`, loopback-only ports, digest-pinned PostgreSQL) landed 2026-11-14; there is still no published runnable image or backup script. Buildpacks manage packaging; the project still owns version currency, reproducibility, architecture tests, and recovery.
 
 ## Alternatives
 

@@ -1,9 +1,10 @@
 # Contributing
 
-Thanks for your interest in Social Cross-Poster! This project is currently a
-documented design baseline (see [README.md](README.md) and [Plan.md](Plan.md)),
-and contributions to the documentation, decisions, and review are very
-welcome. Code contributions will be accepted once the P0 scaffolding lands.
+Thanks for your interest in Social Cross-Poster! This project started as a
+documented design baseline (see [README.md](README.md) and [Plan.md](Plan.md));
+the P0 scaffolding and [UC-01](docs/usecases/UC-01-login.md) landed on
+2026-11-14, so contributions to the documentation, decisions, review, **and
+code** are welcome.
 
 ## How to contribute
 
@@ -41,7 +42,8 @@ welcome. Code contributions will be accepted once the P0 scaffolding lands.
   `git config core.hooksPath .githooks`).
 
 - Distinguish **implemented behavior** from **planned/candidate** behavior.
-  Nothing in this repository is implemented yet; do not claim otherwise.
+  Only the P0 scaffolding and UC-01 (login + workspace picker) are implemented
+  as of 2026-11-14; UC-02…UC-16 remain planned. Do not claim more.
 - External links must be dated and sourced where they record a verification
   (see `docs/technologies.md` and `docs/platforms/README.md`).
 
@@ -49,7 +51,8 @@ welcome. Code contributions will be accepted once the P0 scaffolding lands.
 
 - Fill in the [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
 - One logical change per PR; keep the diff reviewable.
-- CI must pass (markdownlint + documentation consistency checks).
+- CI must pass (Java build/tests + formatting, markdownlint + documentation
+  consistency checks). Build locally with `./mvnw clean verify`.
 - The maintainer signs and merges; all commits on `main` are GPG-signed.
 
 ## Code of conduct
