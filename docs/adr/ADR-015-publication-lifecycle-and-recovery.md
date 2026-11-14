@@ -1,6 +1,6 @@
 # ADR-015 — Immutable approval, durable delivery, and uncertain outcomes
 
-- **Status:** Accepted
+- **Status:** Accepted; the immutable-revision part of the draft lifecycle is implemented 2026-11-14 (UC-04 first slice: V4 `post`/`post_revision`, current-revision pointer, optimistic version — every save appends a new revision); publication/delivery/schedule/approval remain planned
 - **Date:** 2026-11-13
 
 ## Context
