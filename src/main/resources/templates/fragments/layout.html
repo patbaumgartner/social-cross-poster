@@ -16,6 +16,7 @@
     <span class="workspace-badge" th:if="${workspace != null}" th:attr="data-ws=${workspace.slug}"
           th:text="${workspace.label}">Workspace</span>
     <a th:if="${workspace != null}" th:href="@{/w/{slug}/accounts(slug=${workspace.slug})}">Accounts</a>
+    <a th:if="${workspace != null}" th:href="@{/w/{slug}/contacts(slug=${workspace.slug})}">Contacts</a>
     <form class="logout" method="post" th:action="@{/logout}">
       <button type="submit">Sign out</button>
     </form>

@@ -11,3 +11,19 @@ document.addEventListener("htmx:configRequest", (event) => {
     event.detail.headers[header.content] = token.content;
   }
 });
+
+// Mention autocomplete (UC-03, ADR-003): clicking a result inserts the neutral
+// local contact token into the composer field at the cursor position. External
+// file only, so this stays CSP-safe under script-src 'self'.
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-mention-token]");
+  if (!button) return;
+  const composer = document.querySelector("[data-mention-composer]");
+  if (!composer) return;
+  const token = button.getAttribute("data-mention-token");
+  const start = composer.selectionStart ?? composer.value.length;
+  const end = composer.selectionEnd ?? start;
+  composer.value = composer.value.slice(0, start) + token + " " + composer.value.slice(end);
+  composer.dispatchEvent(new Event("input", { bubbles: true }));
+  composer.focus();
+});

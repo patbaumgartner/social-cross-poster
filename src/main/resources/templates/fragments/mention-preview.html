@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <!-- UC-03 step 4: destination preview resolving mention tokens for one
+       platform. Native mentions and display-name fallbacks are labelled
+       explicitly; unknown tokens are flagged, never dropped. -->
+  <div th:fragment="preview" class="mention-preview">
+    <p>Platform <strong th:text="${platform}">telegram</strong> · text <code th:text="${text}">…</code></p>
+    <ul th:if="${!matches.isEmpty()}">
+      <li th:each="m : ${matches}">
+        <span class="badge" th:text="${m.status}">NATIVE</span>
+        <span th:text="${m.displayName}">Name</span>
+        <code th:text="${m.renderedText}">@alice</code>
+        <small th:if="${m.archived}">(archived)</small>
+        <small th:text="${m.note}">note</small>
+      </li>
+    </ul>
+    <p th:if="${matches.isEmpty()}">No mention tokens in this text.</p>
+  </div>
+</body>
+</html>

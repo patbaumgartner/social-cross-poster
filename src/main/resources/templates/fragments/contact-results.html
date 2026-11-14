@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+  <!-- UC-03 autocomplete fragment: one button per match; app.js inserts the
+       neutral token into the [data-mention-composer] field on click. Results
+       never include private notes. -->
+  <ul th:fragment="results" class="mention-results">
+    <li th:each="m : ${matches}">
+      <button type="button" class="mention-result"
+              th:attr="data-mention-token=${m.token}, data-mention-name=${m.displayName}">
+        <img th:if="${m.photo != null}" th:src="${m.photo}" alt="" class="avatar">
+        <span th:text="${m.displayName}">Name</span>
+        <code th:text="${m.token}">{{contact:…}}</code>
+      </button>
+    </li>
+    <li th:if="${matches.isEmpty() and query != null and !query.isBlank()}" class="empty">
+      No matching contacts in this workspace.
+    </li>
+  </ul>
+</body>
+</html>
