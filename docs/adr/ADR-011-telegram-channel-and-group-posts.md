@@ -1,6 +1,6 @@
 # ADR-011 — Telegram channel and group announcements
 
-- **Status:** Accepted as design; implementation capabilities must be verified
+- **Status:** Accepted as design; text channel/group posting is implemented 2026-11-14 (UC-05 first slice: `TelegramPublisher` sends form `chat_id`+`text` via Bot API `sendMessage` to the destination's chat id, 30 s read timeout, HTTP 4xx = FAILED / 5xx+transport = UNKNOWN; verified capability so far: `getMe` probe from the UC-02 slice); photos/albums, captions, edit/delete rights and media limits remain to be verified (UC-13)
 - **Date:** 2026-11-13
 
 ## Context

@@ -18,8 +18,10 @@ This repository contains the design documentation plus the P0 scaffolding,
 [UC-01 (login)](docs/usecases/UC-01-login.md), the first [UC-02
 slice](docs/usecases/UC-02-manage-accounts.md) (encrypted provider secrets),
 [UC-03 (contacts)](docs/usecases/UC-03-manage-contacts.md) (workspace contacts,
-handles, mention tokens) and the first [UC-04 slice](docs/usecases/UC-04-compose-post.md)
-(post revisions, destination selection, previews) implemented on 2026-11-14 —
+handles, mention tokens), the first [UC-04 slice](docs/usecases/UC-04-compose-post.md)
+(post revisions, destination selection, previews) and the first [UC-05
+slice](docs/usecases/UC-05-post-now.md) (publication/delivery records,
+redacted attempts, idempotent submissions) implemented on 2026-11-14 —
 the application exists and
 handles the owner password hash, AES-256-GCM-sealed provider secrets, and
 workspace-local contact and draft data (photos stored as `data:` URIs only, never fetched
@@ -46,8 +48,8 @@ NAS itself is the operator's responsibility.
 | Any released application version | See GitHub releases / security advisories |
 
 No application release exists yet, so only the current `main` baseline
-(scaffolding + UC-01 + UC-02 first slice + UC-03 + UC-04 first slice) is
-maintained; released
+(scaffolding + UC-01 + UC-02 first slice + UC-03 + UC-04 first slice +
+UC-05 first slice) is maintained; released
 application versions will be listed here once published.
 
 ## Security-relevant configuration

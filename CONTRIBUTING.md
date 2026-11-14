@@ -45,8 +45,10 @@ code** are welcome.
   As of 2026-11-14 the P0 scaffolding, UC-01 (login + workspace picker), the
   first UC-02 slice (connections/destinations + encrypted secrets, telegram
   pasted only), UC-03 (contacts, handles, mention tokens + previews) and the
-  first UC-04 slice (immutable revisions + per-destination previews) are
-  implemented; the rest of UC-02…UC-16 remains planned. Do not claim more.
+  first UC-04 slice (immutable revisions + per-destination previews) and
+  the first UC-05 slice (idempotent submissions, telegram text publishing
+  and delivery states) are implemented; the rest of UC-02…UC-16 remains
+  planned. Do not claim more.
 - External links must be dated and sourced where they record a verification
   (see `docs/technologies.md` and `docs/platforms/README.md`).
 

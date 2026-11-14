@@ -1,6 +1,6 @@
 # ADR-001 — Stateless platform strategies with explicit destination context
 
-- **Status:** Accepted; amended during the pre-implementation review
+- **Status:** Accepted; amended during the pre-implementation review; the publisher half is implemented 2026-11-14 (UC-05 first slice: stateless `PlatformPublisher` per platform with explicit `PublishContext(credential, targetId, text, idempotencyKey)`, `PublisherRegistry`, and `TelegramPublisher` using Bot API `sendMessage` with SUCCESS/FAILED/UNKNOWN classification; the probe half is implemented since the UC-02 first slice via `PlatformProbe`)
 - **Date:** 2026-11-13
 
 ## Context
