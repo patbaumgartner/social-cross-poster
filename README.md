@@ -7,7 +7,7 @@
 
 A planned self-hosted application for writing, reviewing, and publishing content across several brands and social accounts. Inspired by [crosspost](https://github.com/humanwhocodes/crosspost), with a browser UI and a Docker Compose deployment for a NAS.
 
-**Status: P0 scaffolding landed 2026-11-14 — the application builds and runs, and [UC-01 (login + workspace picker)](docs/usecases/UC-01-login.md) is implemented and tested.** The remaining use cases (UC-02…UC-16) are still design only. A Compose baseline (`docker-compose.yml`, app + private PostgreSQL) exists, but no release image is published yet, so there is no packaged quick start.
+**Status: P0 scaffolding landed 2026-11-14 — the application builds and runs, [UC-01 (login + workspace picker)](docs/usecases/UC-01-login.md) is implemented and tested, and the first slice of [UC-02 (accounts)](docs/usecases/UC-02-manage-accounts.md) (telegram/pasted connections with AES-256-GCM-encrypted secrets + manual destinations) is in.** The rest of UC-02…UC-16 is still design only. A Compose baseline (`docker-compose.yml`, app + private PostgreSQL) exists, but no release image is published yet, so there is no packaged quick start.
 
 ## One owner per installation, several account sets
 
@@ -52,6 +52,10 @@ Requires Java 27. The Maven Wrapper is pinned with a checksum.
 # htpasswd -bnBC 10 "" "your-password" | cut -d: -f2   # -> $2a$10$...
 export APP_USER=owner
 export APP_PASSWORD_HASH='{bcrypt}$2a$10$...'
+# Fail-closed workspace secret encryption key (ADR-007): 32 random bytes,
+# base64-encoded. Generate once: openssl rand -base64 32
+export APP_SECRETS_KEY="$(openssl rand -base64 32)"
+export APP_SECRETS_KEY_ID=v1
 ./mvnw clean verify        # format check + build + tests (H2 in PostgreSQL mode)
 ./mvnw spring-boot:run     # serves :8080; actuator/health on :8081
 ```
