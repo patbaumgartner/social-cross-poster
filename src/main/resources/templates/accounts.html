@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Accounts')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — accounts'">Accounts</h1>
+    <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Dashboard</a></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p class="notice" role="status" th:if="${notice}" th:text="${notice}">Notice</p>
+
+    <section class="card">
+      <h2>Connections</h2>
+      <p>One connection is one provider authorization. Several connections of the same platform can coexist in this workspace.</p>
+      <table th:if="${!connections.isEmpty()}">
+        <thead>
+          <tr><th>Platform</th><th>Principal</th><th>Label</th><th>Mode</th><th>Health</th><th>Enabled</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <tr th:each="c : ${connections}">
+            <td th:text="${c.platform}">telegram</td>
+            <td th:text="${c.providerPrincipal}">@bot</td>
+            <td th:text="${c.label}">label</td>
+            <td th:text="${c.mode}">pasted</td>
+            <td>
+              <span th:text="${c.healthState}">OK</span>
+              <small th:if="${c.lastHealthAt != null}" th:text="'(' + ${#temporals.format(c.lastHealthAt, 'yyyy-MM-dd HH:mm')} + ')'">(time)</small>
+            </td>
+            <td th:text="${c.enabled} ? 'yes' : 'no'">yes</td>
+            <td class="actions">
+              <form method="post" th:action="@{/w/{slug}/accounts/connections/{id}/health(slug=${workspace.slug},id=${c.id})}">
+                <button type="submit">Check health</button>
+              </form>
+              <form method="post" th:action="@{/w/{slug}/accounts/connections/{id}/toggle(slug=${workspace.slug},id=${c.id})}">
+                <input type="hidden" name="enabled" th:value="${!c.enabled}">
+                <button type="submit" th:text="${c.enabled} ? 'Disable' : 'Enable'">Disable</button>
+              </form>
+              <details>
+                <summary>Rotate secret</summary>
+                <form method="post" th:action="@{/w/{slug}/accounts/connections/{id}/rotate(slug=${workspace.slug},id=${c.id})}">
+                  <input type="password" name="credential" placeholder="new token (write-only)" required>
+                  <button type="submit">Rotate &amp; verify</button>
+                </form>
+              </details>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p th:if="${connections.isEmpty()}">No connections yet.</p>
+
+      <h3>Add a connection</h3>
+      <form method="post" th:action="@{/w/{slug}/accounts/connections(slug=${workspace.slug})}">
+        <div class="field">
+          <label for="platform">Platform</label>
+          <select id="platform" name="platform" required>
+            <option th:each="p : ${platforms}" th:value="${p.key}" th:text="${p.key}"
+                    th:selected="${p.key == platform}">telegram</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="mode">Credential mode</label>
+          <select id="mode" name="mode" required>
+            <option value="pasted">pasted token</option>
+            <option value="oauth">OAuth</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="label">Label (optional)</label>
+          <input id="label" name="label" type="text" th:value="${label}">
+        </div>
+        <div class="field">
+          <label for="credential">Secret (write-only, never shown again)</label>
+          <input id="credential" name="credential" type="password" required autocomplete="off">
+        </div>
+        <button class="primary" type="submit">Connect &amp; verify</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Destinations</h2>
+      <p>Selectable accounts exposed by a connection: two chats/pages are two destinations.</p>
+      <table th:if="${!destinations.isEmpty()}">
+        <thead>
+          <tr><th>Label</th><th>Kind</th><th>Provider id</th><th>Host</th><th>Platform</th><th>Enabled</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <tr th:each="d : ${destinations}">
+            <td th:text="${d.label}">label</td>
+            <td th:text="${d.kind}">channel</td>
+            <td th:text="${d.providerAccountId}">-100123</td>
+            <td th:text="${d.host} ?: ''">host</td>
+            <td th:text="${d.platform}">telegram</td>
+            <td th:text="${d.enabled} ? 'yes' : 'no'">yes</td>
+            <td class="actions">
+              <form method="post" th:action="@{/w/{slug}/accounts/destinations/{id}/toggle(slug=${workspace.slug},id=${d.id})}">
+                <input type="hidden" name="enabled" th:value="${!d.enabled}">
+                <button type="submit" th:text="${d.enabled} ? 'Disable' : 'Enable'">Disable</button>
+              </form>
+              <form method="post" th:action="@{/w/{slug}/accounts/destinations/{id}/delete(slug=${workspace.slug},id=${d.id})}">
+                <button type="submit">Archive</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p th:if="${destinations.isEmpty()}">No destinations yet.</p>
+
+      <h3>Add a destination</h3>
+      <form method="post" th:action="@{/w/{slug}/accounts/destinations(slug=${workspace.slug})}">
+        <div class="field">
+          <label for="connectionId">Connection</label>
+          <select id="connectionId" name="connectionId" required>
+            <option th:each="c : ${connections}" th:if="${c.enabled}" th:value="${c.id}"
+                    th:text="${c.platform + ' — ' + c.providerPrincipal}">conn</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="kind">Kind</label>
+          <select id="kind" name="kind" required>
+            <option value="channel">channel</option>
+            <option value="group">group</option>
+            <option value="page">page</option>
+            <option value="profile">profile</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="providerAccountId">Provider account id</label>
+          <input id="providerAccountId" name="providerAccountId" type="text" required placeholder="-1001234567890">
+        </div>
+        <div class="field">
+          <label for="host">Host / instance (optional)</label>
+          <input id="host" name="host" type="text" placeholder="mastodon.social">
+        </div>
+        <div class="field">
+          <label for="dlabel">Label</label>
+          <input id="dlabel" name="label" type="text" required>
+        </div>
+        <button class="primary" type="submit">Add destination</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
