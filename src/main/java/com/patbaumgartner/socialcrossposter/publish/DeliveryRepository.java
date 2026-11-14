@@ -11,4 +11,6 @@ public interface DeliveryRepository extends CrudRepository<Delivery, Long> {
 
 	List<Delivery> findAllByWorkspaceIdAndPublicationIdOrderByIdAsc(Long workspaceId, Long publicationId);
 
+	List<Delivery> findAllByWorkspaceId(Long workspaceId);
+
 }

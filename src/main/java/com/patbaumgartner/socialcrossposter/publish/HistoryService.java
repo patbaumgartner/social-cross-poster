@@ -71,6 +71,16 @@ public class HistoryService {
 		return new HistoryPage(all.subList(from, to), pageIndex, pageSize, totalItems, totalPages);
 	}
 
+	/** Distinct delivery platforms present in this workspace's history, sorted. */
+	public List<String> platformsOf(Long workspaceId) {
+		return this.deliveries.findAllByWorkspaceId(workspaceId)
+			.stream()
+			.map(Delivery::platform)
+			.distinct()
+			.sorted()
+			.toList();
+	}
+
 	/**
 	 * Full detail of one publication, workspace-scoped (UC-06 step 3). Unknown or foreign
 	 * publication ids fail closed (ADR-013).

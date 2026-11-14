@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Publication')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — publication #' + ${detail.publication.id}">Publication</h1>
+    <p><a th:href="@{/w/{slug}/history(slug=${workspace.slug})}">&larr; History</a>
+       <span th:if="${detail.post != null}"> · <a th:href="@{/w/{slug}/posts/{id}(slug=${workspace.slug},id=${detail.post.id})}">Open post</a></span></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+
+    <section class="card">
+      <h2>Summary <span class="badge" th:text="${detail.publication.state}">PUBLISHED</span></h2>
+      <p>Post: <span th:text="${detail.post != null and detail.post.title != null ? detail.post.title : 'Post #' + detail.publication.postId}">title</span>
+        · revision #<span th:text="${detail.publication.revisionId}">1</span>
+        · submitted <small th:text="${#temporals.format(detail.publication.createdAt, 'yyyy-MM-dd HH:mm')}">time</small></p>
+      <p>Submission key <code th:text="${detail.publication.submissionKey}">key</code> ·
+        payload hash <code th:text="${detail.publication.payloadHash}">hash</code></p>
+      <p th:if="${detail.revision != null}">Approved revision text (immutable):</p>
+      <pre th:if="${detail.revision != null}" th:text="${detail.revision.defaultText}">text</pre>
+      <p th:if="${detail.revision == null}"><em>The approved revision is no longer available (post deleted).</em></p>
+    </section>
+
+    <section class="card">
+      <h2>Deliveries</h2>
+      <p th:if="${detail.deliveries.isEmpty()}"><em>No deliveries.</em></p>
+      <div th:each="dd : ${detail.deliveries}" class="card">
+        <h3 th:text="${dd.delivery.platform + ' · ' + dd.delivery.destinationLabel}">destination</h3>
+        <p>Provider identity: <code th:text="${dd.delivery.providerAccountId}">id</code>
+          <span th:if="${dd.delivery.host != null and !#strings.isEmpty(dd.delivery.host)}" th:text="' @' + ${dd.delivery.host}">host</span>
+          · state <span class="badge" th:text="${dd.delivery.state}">SUCCESS</span>
+          <span th:if="${dd.delivery.externalRef != null}"> · external ref <code th:text="${dd.delivery.externalRef}">ref</code></span>
+        </p>
+        <p>Actual payload sent (immutable snapshot):</p>
+        <pre th:text="${dd.delivery.payloadText}">payload</pre>
+        <p>Payload hash <code th:text="${dd.delivery.payloadHash}">hash</code></p>
+        <table th:if="${!dd.attempts.isEmpty()}">
+          <thead>
+            <tr><th>#</th><th>Stage</th><th>Outcome</th><th>Detail (redacted)</th><th>External ref</th><th>At</th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="a : ${dd.attempts}">
+              <td th:text="${a.attemptNo}">1</td>
+              <td th:text="${a.stage}">send</td>
+              <td><span class="badge" th:text="${a.outcome}">SUCCESS</span></td>
+              <td th:text="${a.detail} ?: ''">detail</td>
+              <td><code th:if="${a.externalRef != null}" th:text="${a.externalRef}">ref</code></td>
+              <td><small th:text="${#temporals.format(a.createdAt, 'yyyy-MM-dd HH:mm:ss')}">time</small></td>
+            </tr>
+          </tbody>
+        </table>
+        <p th:if="${dd.attempts.isEmpty()}"><em>No attempts recorded.</em></p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
