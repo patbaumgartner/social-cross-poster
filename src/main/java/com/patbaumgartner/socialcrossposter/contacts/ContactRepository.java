@@ -12,7 +12,7 @@ public interface ContactRepository extends CrudRepository<Contact, Long> {
 	List<Contact> findAllByWorkspaceIdAndArchivedFalseOrderByDisplayNameAsc(Long workspaceId);
 
 	List<Contact> findTop8ByWorkspaceIdAndArchivedFalseAndDisplayNameContainingIgnoreCaseOrderByDisplayNameAsc(
-			Long workspaceId, boolean archived, String displayNamePart);
+			Long workspaceId, String displayNamePart);
 
 	Optional<Contact> findByIdAndWorkspaceId(Long id, Long workspaceId);
 

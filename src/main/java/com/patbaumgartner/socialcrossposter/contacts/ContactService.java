@@ -67,7 +67,7 @@ public class ContactService {
 		String q = query.trim();
 		return this.contacts
 			.findTop8ByWorkspaceIdAndArchivedFalseAndDisplayNameContainingIgnoreCaseOrderByDisplayNameAsc(workspaceId,
-					false, q)
+					q)
 			.stream()
 			.map((c) -> new SearchResult(c.id(), c.displayName(), c.token(), c.photo()))
 			.toList();
