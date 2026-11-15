@@ -47,7 +47,7 @@ code** are welcome.
   pasted only), UC-03 (contacts, handles, mention tokens + previews) and the
   first UC-04 slice (immutable revisions + per-destination previews) and
   the first UC-05 slice (idempotent submissions, telegram text publishing
-  and delivery states) and the first UC-06 slice (read-only publication history: filtered/paginated list + fail-closed detail) are implemented; the rest of UC-02…UC-16 remains
+  and delivery states), the first UC-06 slice (read-only publication history: filtered/paginated list + fail-closed detail) and the first UC-07 slice (durable `delivery_job` retries with lease-guarded worker claims, bounded backoff, owner retry/reconcile, UNKNOWN reconciliation) are implemented; the rest of UC-02…UC-16 remains
   planned. Do not claim more.
 - External links must be dated and sourced where they record a verification
   (see `docs/technologies.md` and `docs/platforms/README.md`).

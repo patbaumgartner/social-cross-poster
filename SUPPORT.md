@@ -8,7 +8,7 @@ scaffolding, UC-01 (login + workspace picker), the first UC-02 slice
 (contacts, handles, mention tokens + previews), the first UC-04 slice
 (immutable revisions + per-destination previews) and the first UC-05 slice
 (publish now: idempotent submissions, telegram text delivery + states)
-and the first UC-06 slice (history: read-only filtered/paginated publication list + fail-closed detail) implemented** (2026-11-14; UC-06 2026-11-15).
+and the first UC-06 slice (history: read-only filtered/paginated publication list + fail-closed detail) and the first UC-07 slice (durable retry jobs/worker, bounded backoff, owner retry/reconcile, UNKNOWN reconciliation) implemented** (2026-11-14; UC-06/UC-07 2026-11-15).
 There is a Compose baseline (`docker-compose.yml`) but no published release
 image yet — see the [README](README.md) status note and [Plan.md](Plan.md) for
 the delivery roadmap and acceptance gates.
