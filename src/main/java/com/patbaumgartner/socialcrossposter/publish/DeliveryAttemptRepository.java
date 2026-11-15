@@ -11,4 +11,6 @@ public interface DeliveryAttemptRepository extends CrudRepository<DeliveryAttemp
 
 	Optional<DeliveryAttempt> findTopByDeliveryIdOrderByAttemptNoDesc(Long deliveryId);
 
+	long countByDeliveryId(Long deliveryId);
+
 }

@@ -30,6 +30,7 @@ import com.patbaumgartner.socialcrossposter.content.RevisionOverrideRepository;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttempt;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryRepository;
 import com.patbaumgartner.socialcrossposter.publish.Publication;
 import com.patbaumgartner.socialcrossposter.publish.PublicationRepository;
@@ -103,9 +104,13 @@ class HistoryFlowTest {
 	@Autowired
 	DeliveryAttemptRepository attempts;
 
+	@Autowired
+	DeliveryJobRepository jobs;
+
 	@BeforeEach
 	@AfterEach
 	void resetState() {
+		this.jobs.deleteAll();
 		this.attempts.deleteAll();
 		this.deliveries.deleteAll();
 		this.publications.deleteAll();

@@ -20,6 +20,7 @@ import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverride;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryJobService;
 import com.patbaumgartner.socialcrossposter.publish.Publication;
 import com.patbaumgartner.socialcrossposter.publish.PublicationException;
 import com.patbaumgartner.socialcrossposter.publish.PublicationService;
@@ -31,9 +32,11 @@ import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
  * confirmation page shows the final per-destination previews and blockers with a
  * generated workspace-scoped submission key (UC-05 steps 1-2); the POST creates the
  * publication (idempotent under the key), executes every PENDING delivery synchronously
- * in the request and refreshes the ADR-015 aggregate. Durable jobs/leases/worker
- * execution and notifications land with UC-07/UC-12. Every route carries the explicit
- * workspace slug; unknown slugs or foreign post ids fail closed (ADR-013).
+ * in the request via {@link DeliveryJobService#executeInitialAndSettle} — which also
+ * settles the durable outcome (retryable failures become RETRY_WAIT with a scheduled job,
+ * UNKNOWN outcomes are reconciled; the worker and owner actions live in UC-07) — and
+ * refreshes the ADR-015 aggregate. Notifications land with UC-12. Every route carries the
+ * explicit workspace slug; unknown slugs or foreign post ids fail closed (ADR-013).
  */
 @Controller
 public class PublishController {
@@ -46,12 +49,15 @@ public class PublishController {
 
 	private final PublicationService publications;
 
+	private final DeliveryJobService jobs;
+
 	public PublishController(WorkspaceService workspaces, PostService posts, PreviewService previews,
-			PublicationService publications) {
+			PublicationService publications, DeliveryJobService jobs) {
 		this.workspaces = workspaces;
 		this.posts = posts;
 		this.previews = previews;
 		this.publications = publications;
+		this.jobs = jobs;
 	}
 
 	/**
@@ -85,10 +91,10 @@ public class PublishController {
 	}
 
 	/**
-	 * Publishes now (UC-05 steps 2-5, synchronous first slice): creates the publication
-	 * under the submitted key — a repeated submit with the same approved payload returns
-	 * the existing publication (ADR-015) — executes every PENDING delivery and refreshes
-	 * the aggregate state.
+	 * Publishes now (UC-05 steps 2-5): creates the publication under the submitted key —
+	 * a repeated submit with the same approved payload returns the existing publication
+	 * (ADR-015) — executes every PENDING delivery synchronously in the request and
+	 * settles each durable outcome (UC-07), then refreshes the aggregate state.
 	 */
 	@PostMapping("/w/{slug}/posts/{id}/publish")
 	public String publish(@PathVariable String slug, @PathVariable Long id, @RequestParam String submissionKey,
@@ -98,7 +104,7 @@ public class PublishController {
 				boolean existed = this.publications.findBySubmissionKey(workspace.id(), submissionKey).isPresent();
 				Publication publication = this.publications.create(workspace.id(), workspace.slug(), id, submissionKey);
 				for (Delivery delivery : this.publications.deliveriesOf(workspace.id(), publication.id())) {
-					this.publications.executeDelivery(workspace.id(), workspace.slug(), delivery.id());
+					this.jobs.executeInitialAndSettle(workspace.id(), workspace.slug(), delivery.id());
 				}
 				Publication refreshed = this.publications.refreshAggregate(workspace.id(), publication.id());
 				redirect.addFlashAttribute("notice",

@@ -28,3 +28,7 @@ app:
     # used outside tests.
     key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
     key-id: test-v1
+  # The scheduled worker is off in tests (UC-07); tests drive
+  # DeliveryJobService.runDueJobs(now) manually.
+  worker:
+    enabled: false

@@ -41,3 +41,14 @@ app:
   # decrypted without an externally supplied versioned key, so startup fails
   # closed without them (ADR-007). The key is supplied via the protected
   # environment/secret files, never stored in the database or this file.
+  # Durable retry worker (UC-07, ADR-015): APP_WORKER_ENABLED=false disables the
+  # scheduled worker (tests drive DeliveryJobService.runDueJobs manually).
+  worker:
+    enabled: ${APP_WORKER_ENABLED:true}
+    poll-interval-ms: ${APP_WORKER_POLL_INTERVAL_MS:5000}
+    initial-delay-ms: ${APP_WORKER_INITIAL_DELAY_MS:2000}
+    lease-ttl-seconds: ${APP_WORKER_LEASE_TTL_SECONDS:60}
+    max-attempts: ${APP_WORKER_MAX_ATTEMPTS:4}
+    backoff-base-seconds: ${APP_WORKER_BACKOFF_BASE_SECONDS:60}
+    backoff-cap-seconds: ${APP_WORKER_BACKOFF_CAP_SECONDS:3600}
+    instance-id: ${APP_WORKER_INSTANCE_ID:}

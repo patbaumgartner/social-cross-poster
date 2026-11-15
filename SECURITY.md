@@ -21,7 +21,7 @@ slice](docs/usecases/UC-02-manage-accounts.md) (encrypted provider secrets),
 handles, mention tokens), the first [UC-04 slice](docs/usecases/UC-04-compose-post.md)
 (post revisions, destination selection, previews) and the first [UC-05
 slice](docs/usecases/UC-05-post-now.md) (publication/delivery records,
-redacted attempts, idempotent submissions) implemented on 2026-11-14, plus the first [UC-06 slice](docs/usecases/UC-06-view-history.md) (read-only history views, fail-closed lookups) on 2026-11-15 —
+redacted attempts, idempotent submissions) implemented on 2026-11-14, plus the first [UC-06 slice](docs/usecases/UC-06-view-history.md) (read-only history views, fail-closed lookups) and the first [UC-07 slice](docs/usecases/UC-07-retry-failed-target.md) (durable retry jobs, fail-closed retry/reconcile actions) on 2026-11-15 —
 the application exists and
 handles the owner password hash, AES-256-GCM-sealed provider secrets, and
 workspace-local contact and draft data (photos stored as `data:` URIs only, never fetched
@@ -49,7 +49,7 @@ NAS itself is the operator's responsibility.
 
 No application release exists yet, so only the current `main` baseline
 (scaffolding + UC-01 + UC-02 first slice + UC-03 + UC-04 first slice +
-UC-05 first slice + UC-06 first slice) is maintained; released
+UC-05 first slice + UC-06 first slice + UC-07 first slice) is maintained; released
 application versions will be listed here once published.
 
 ## Security-relevant configuration
