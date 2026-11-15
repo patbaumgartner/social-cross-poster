@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.patbaumgartner.socialcrossposter.notify.NotificationService;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
 
@@ -47,16 +48,19 @@ public class DeliveryJobService {
 
 	private final WorkerProperties props;
 
+	private final NotificationService notifications;
+
 	private final String instanceId;
 
 	private final Random random = new Random();
 
 	public DeliveryJobService(PublicationService publications, DeliveryJobRepository jobs,
-			WorkspaceRepository workspaces, WorkerProperties props) {
+			WorkspaceRepository workspaces, WorkerProperties props, NotificationService notifications) {
 		this.publications = publications;
 		this.jobs = jobs;
 		this.workspaces = workspaces;
 		this.props = props;
+		this.notifications = notifications;
 		this.instanceId = props.instanceId() == null || props.instanceId().isBlank() ? "worker-" + UUID.randomUUID()
 				: props.instanceId();
 	}
@@ -190,7 +194,8 @@ public class DeliveryJobService {
 	 */
 	@Transactional
 	public Delivery settle(Long workspaceId, String workspaceSlug, Delivery delivery, OffsetDateTime now) {
-		if (PublicationService.D_UNKNOWN.equals(delivery.state())) {
+		boolean unknownBefore = PublicationService.D_UNKNOWN.equals(delivery.state());
+		if (unknownBefore) {
 			delivery = this.publications.reconcileDelivery(workspaceId, workspaceSlug, delivery.id());
 		}
 		switch (delivery.state()) {
@@ -202,15 +207,22 @@ public class DeliveryJobService {
 					this.publications.updateDeliveryState(workspaceId, delivery.id(), PublicationService.D_RETRY_WAIT,
 							delivery.externalRef());
 					upsertJob(workspaceId, delivery.id(), J_PENDING, now.plusSeconds(backoffSeconds(attempts)));
+					this.notifications.notifyDeliveryFailed(workspaceId, delivery);
 				}
 				else {
 					markJob(workspaceId, delivery.id(), J_EXHAUSTED, null, now);
+					this.notifications.notifyRetriesExhausted(workspaceId, delivery, attempts);
 				}
 			}
-			case PublicationService.D_NEEDS_ATTENTION, PublicationService.D_NEEDS_REVIEW ->
+			case PublicationService.D_NEEDS_ATTENTION, PublicationService.D_NEEDS_REVIEW -> {
 				markJob(workspaceId, delivery.id(), J_CANCELED, null, now);
+				this.notifications.notifyDeliveryNeedsAttention(workspaceId, delivery);
+			}
 			default ->
 				upsertJob(workspaceId, delivery.id(), J_PENDING, now.plusSeconds(this.props.backoffBaseSeconds()));
+		}
+		if (unknownBefore && PublicationService.D_UNKNOWN.equals(delivery.state())) {
+			this.notifications.notifyDeliveryUnknown(workspaceId, delivery);
 		}
 		this.publications.refreshAggregate(workspaceId, delivery.publicationId());
 		return this.publications.requireDelivery(workspaceId, delivery.id());

@@ -10,8 +10,26 @@
     <p><a th:href="@{/w/{slug}/accounts(slug=${workspace.slug})}">Accounts &amp; destinations (UC-02)</a></p>
     <p><a th:href="@{/w/{slug}/contacts(slug=${workspace.slug})}">Contacts &amp; mentions (UC-03)</a></p>
     <p><a th:href="@{/w/{slug}/posts(slug=${workspace.slug})}">Posts &amp; compose (UC-04)</a> ·
-       <a th:href="@{/w/{slug}/compose(slug=${workspace.slug})}">+ New post</a></p>
+       <a th:href="@{/w/{slug}/compose(slug=${workspace.slug})}">+ New post</a> ·
+       <a th:href="@{/w/{slug}/history(slug=${workspace.slug})}">History (UC-06)</a></p>
     <p><a th:href="@{/}">&larr; All workspaces</a></p>
+
+    <section class="card">
+      <h2>Notifications (UC-12)</h2>
+      <p>In-app events are authoritative and always shown here; external webhook/SMTP
+        delivery lands with a later slice. Summaries are redacted — no draft text, tokens
+        or raw provider bodies.</p>
+      <p th:if="${events.isEmpty()}"><em>No events yet.</em></p>
+      <ul th:if="${!events.isEmpty()}">
+        <li th:each="e : ${events}">
+          <span class="badge" th:text="${e.category}">DELIVERY_FAILED</span>
+          <span th:text="${e.summary}">summary</span>
+          · <small th:text="${e.createdAt}">time</small>
+          <a th:if="${e.publicationId != null}"
+             th:href="@{/w/{slug}/history/{id}(slug=${workspace.slug},id=${e.publicationId})}">publication</a>
+        </li>
+      </ul>
+    </section>
   </main>
 </body>
 </html>
