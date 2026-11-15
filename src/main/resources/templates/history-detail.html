@@ -9,6 +9,7 @@
        <span th:if="${detail.post != null}"> · <a th:href="@{/w/{slug}/posts/{id}(slug=${workspace.slug},id=${detail.post.id})}">Open post</a></span></p>
 
     <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p class="notice" role="status" th:if="${notice}" th:text="${notice}">Notice</p>
 
     <section class="card">
       <h2>Summary <span class="badge" th:text="${detail.publication.state}">PUBLISHED</span></h2>
@@ -35,6 +36,20 @@
         <p>Actual payload sent (immutable snapshot):</p>
         <pre th:text="${dd.delivery.payloadText}">payload</pre>
         <p>Payload hash <code th:text="${dd.delivery.payloadHash}">hash</code></p>
+        <p th:if="${jobsByDelivery[dd.delivery.id] != null}">Durable job:
+          <span class="badge" th:text="${jobsByDelivery[dd.delivery.id].state}">PENDING</span>
+          <span th:if="${jobsByDelivery[dd.delivery.id].nextRunAt != null}">· next run
+            <small th:text="${#temporals.format(jobsByDelivery[dd.delivery.id].nextRunAt, 'yyyy-MM-dd HH:mm:ss')}">time</small></span>
+        </p>
+        <form method="post" style="display:inline" th:if="${retryableStates.contains(dd.delivery.state)}"
+              th:action="@{/w/{slug}/history/{pub}/deliveries/{did}/retry(slug=${workspace.slug},pub=${detail.publication.id},did=${dd.delivery.id})}">
+          <button type="submit">Retry now</button>
+        </form>
+        <form method="post" style="display:inline"
+              th:if="${dd.delivery.state == 'UNKNOWN' or dd.delivery.state == 'NEEDS_ATTENTION'}"
+              th:action="@{/w/{slug}/history/{pub}/deliveries/{did}/reconcile(slug=${workspace.slug},pub=${detail.publication.id},did=${dd.delivery.id})}">
+          <button type="submit">Reconcile</button>
+        </form>
         <table th:if="${!dd.attempts.isEmpty()}">
           <thead>
             <tr><th>#</th><th>Stage</th><th>Outcome</th><th>Detail (redacted)</th><th>External ref</th><th>At</th></tr>

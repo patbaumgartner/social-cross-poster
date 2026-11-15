@@ -38,6 +38,8 @@ import com.patbaumgartner.socialcrossposter.platform.TelegramPublisher;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttempt;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryJob;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryRepository;
 import com.patbaumgartner.socialcrossposter.publish.Publication;
 import com.patbaumgartner.socialcrossposter.publish.PublicationRepository;
@@ -66,9 +68,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * mention-rendered payload (telegram publisher mocked; the stored secret is really
  * sealed/opened through {@link SecretCipher}), repeated submits under the same key return
  * the existing publication while changed content under the same key is rejected,
- * blockers/missing destinations block, provider failures classify FAILED, and foreign
- * post ids fail closed. The H2 database is shared across tests in this context, so
- * cleanup runs in FK-safe order before and after each test.
+ * blockers/missing destinations block, provider failures classify FAILED and settle into
+ * a durable retry (RETRY_WAIT + PENDING job, UC-07), and foreign post ids fail closed.
+ * The H2 database is shared across tests in this context, so cleanup runs in FK-safe
+ * order (delivery_job first) before and after each test.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -116,12 +119,16 @@ class PublishFlowTest {
 	@Autowired
 	DeliveryAttemptRepository attempts;
 
+	@Autowired
+	DeliveryJobRepository jobs;
+
 	@MockitoBean
 	TelegramPublisher telegramPublisher;
 
 	@BeforeEach
 	@AfterEach
 	void resetState() {
+		this.jobs.deleteAll();
 		this.attempts.deleteAll();
 		this.deliveries.deleteAll();
 		this.publications.deleteAll();
@@ -310,7 +317,7 @@ class PublishFlowTest {
 	}
 
 	@Test
-	void confirmedProviderFailureMarksDeliveryAndPublicationFailed() throws Exception {
+	void confirmedProviderFailureSchedulesDurableRetry() throws Exception {
 		MockHttpSession session = login();
 		Long accountId = seedDestination("private", "News channel");
 		Long workspaceId = workspaceId("private");
@@ -323,16 +330,19 @@ class PublishFlowTest {
 				.session(session)
 				.param("submissionKey", "key-fail"))
 			.andExpect(status().is3xxRedirection())
-			.andExpect(flash().attribute("notice", containsString("FAILED")));
+			.andExpect(flash().attribute("notice", containsString("IN_PROGRESS")));
 
 		Publication pub = publicationsOf(workspaceId).get(0);
-		assertThat(pub.state()).isEqualTo("FAILED");
+		assertThat(pub.state()).isEqualTo("IN_PROGRESS");
 		List<Delivery> ds = this.deliveries.findAllByWorkspaceIdAndPublicationIdOrderByIdAsc(workspaceId, pub.id());
-		assertThat(ds.get(0).state()).isEqualTo("FAILED");
+		assertThat(ds.get(0).state()).isEqualTo("RETRY_WAIT");
 		assertThat(ds.get(0).externalRef()).isNull();
 		List<DeliveryAttempt> att = this.attempts.findAllByDeliveryIdOrderByIdAsc(ds.get(0).id());
 		assertThat(att.get(0).outcome()).isEqualTo("FAILED");
 		assertThat(att.get(0).detail()).contains("HTTP 400");
+		DeliveryJob job = this.jobs.findByDeliveryIdAndWorkspaceId(ds.get(0).id(), workspaceId).orElseThrow();
+		assertThat(job.state()).isEqualTo("PENDING");
+		assertThat(job.nextRunAt()).isAfter(ds.get(0).updatedAt());
 	}
 
 	@Test

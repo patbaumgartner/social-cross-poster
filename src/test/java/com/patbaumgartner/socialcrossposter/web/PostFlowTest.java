@@ -28,6 +28,10 @@ import com.patbaumgartner.socialcrossposter.content.PostRevisionRepository;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestinationRepository;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverrideRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryRepository;
+import com.patbaumgartner.socialcrossposter.publish.PublicationRepository;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -86,12 +90,28 @@ class PostFlowTest {
 	@Autowired
 	RevisionOverrideRepository overrides;
 
+	@Autowired
+	PublicationRepository publications;
+
+	@Autowired
+	DeliveryRepository deliveries;
+
+	@Autowired
+	DeliveryAttemptRepository attempts;
+
+	@Autowired
+	DeliveryJobRepository jobs;
+
 	@BeforeEach
 	@AfterEach
 	void resetState() {
 		// The H2 in-memory database is shared across tests in this context; clean in
 		// FK-safe order before and after each test so other test classes (accounts,
 		// contacts) are never affected by leftover post rows.
+		this.jobs.deleteAll();
+		this.attempts.deleteAll();
+		this.deliveries.deleteAll();
+		this.publications.deleteAll();
 		this.overrides.deleteAll();
 		this.destinations.deleteAll();
 		this.posts.clearCurrentRevisionPointers();
