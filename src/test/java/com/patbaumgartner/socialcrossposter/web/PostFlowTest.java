@@ -306,6 +306,115 @@ class PostFlowTest {
 			.andExpect(content().string(containsString("lonely draft")));
 	}
 
+	@Test
+	void restoreEarlierRevisionCreatesNewRevisionAndKeepsAllOldRevisions() throws Exception {
+		MockHttpSession session = login();
+		Long accountId = seedDestination("private", "News channel");
+		Long postId = createPost(session, "private", "Launch", "v1 text", accountId);
+		this.mockMvc
+			.perform(post("/w/private/posts/" + postId).with(csrf())
+				.session(session)
+				.param("title", "Launch")
+				.param("text", "v2 text")
+				.param("accountIds", accountId.toString()))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(flash().attribute("notice", containsString("revision 2")));
+		var before = this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId);
+		assertThat(before).hasSize(2);
+		Long rev1Id = before.get(0).id();
+
+		this.mockMvc.perform(post("/w/private/posts/" + postId + "/restore/" + rev1Id).with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/private/posts/" + postId))
+			.andExpect(flash().attribute("notice", containsString("Restored")))
+			.andExpect(flash().attribute("notice", containsString("revision #3")));
+
+		var after = this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId);
+		assertThat(after).hasSize(3);
+		assertThat(after.get(0).defaultText()).isEqualTo("v1 text");
+		assertThat(after.get(1).defaultText()).isEqualTo("v2 text");
+		assertThat(after.get(2).revisionNo()).isEqualTo(3);
+		assertThat(after.get(2).defaultText()).isEqualTo("v1 text");
+		assertThat(this.destinations.findAllByRevisionId(after.get(2).id())).extracting(RevisionDestination::accountId)
+			.containsExactly(accountId);
+		var post = this.posts.findById(postId).orElseThrow();
+		assertThat(post.currentRevisionId()).isEqualTo(after.get(2).id());
+		assertThat(post.version()).isEqualTo(3L);
+
+		this.mockMvc.perform(get("/w/private/posts/" + postId).session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Restore as new revision")));
+	}
+
+	@Test
+	void staleExpectedVersionSavesNothingAndReportsConflict() throws Exception {
+		MockHttpSession session = login();
+		Long accountId = seedDestination("private", "News channel");
+		Long postId = createPost(session, "private", "Launch", "v1 text", accountId);
+		Long rev1Id = this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId).get(0).id();
+
+		this.mockMvc
+			.perform(post("/w/private/posts/" + postId).with(csrf())
+				.session(session)
+				.param("title", "Launch")
+				.param("text", "concurrent edit")
+				.param("accountIds", accountId.toString())
+				.param("expectedVersion", "99"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/private/posts/" + postId))
+			.andExpect(flash().attribute("error", containsString("Conflict")))
+			.andExpect(flash().attribute("error", containsString("expected version 99")));
+
+		assertThat(this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId)).hasSize(1);
+		var post = this.posts.findById(postId).orElseThrow();
+		assertThat(post.version()).isEqualTo(1L);
+		assertThat(post.currentRevisionId()).isEqualTo(rev1Id);
+	}
+
+	@Test
+	void matchingExpectedVersionSavesNewRevision() throws Exception {
+		MockHttpSession session = login();
+		Long accountId = seedDestination("private", "News channel");
+		Long postId = createPost(session, "private", "Launch", "v1 text", accountId);
+
+		this.mockMvc
+			.perform(post("/w/private/posts/" + postId).with(csrf())
+				.session(session)
+				.param("title", "Launch")
+				.param("text", "v2 text")
+				.param("accountIds", accountId.toString())
+				.param("expectedVersion", "1"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(flash().attribute("notice", containsString("revision 2")));
+
+		assertThat(this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId)).hasSize(2);
+		assertThat(this.posts.findById(postId).orElseThrow().version()).isEqualTo(2L);
+	}
+
+	@Test
+	void restoreFailsClosedForForeignRevisionForeignWorkspaceAndUnknownSlug() throws Exception {
+		MockHttpSession session = login();
+		Long accountId = seedDestination("private", "News channel");
+		Long postId = createPost(session, "private", "Private launch", "secret", accountId);
+		Long rev1Id = this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId).get(0).id();
+
+		this.mockMvc.perform(post("/w/private/posts/" + postId + "/restore/999999").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(flash().attribute("error", containsString("Unknown revision")));
+		this.mockMvc
+			.perform(post("/w/socrates-ch/posts/" + postId + "/restore/" + rev1Id).with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/socrates-ch/posts/" + postId))
+			.andExpect(flash().attribute("error", containsString("Unknown post")));
+		this.mockMvc
+			.perform(post("/w/no-such-workspace/posts/" + postId + "/restore/" + rev1Id).with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/"));
+
+		assertThat(this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId)).hasSize(1);
+		assertThat(this.posts.findById(postId).orElseThrow().version()).isEqualTo(1L);
+	}
+
 	private Long seedDestination(String slug, String label) {
 		Long workspaceId = workspaceId(slug);
 		OffsetDateTime now = OffsetDateTime.now();
