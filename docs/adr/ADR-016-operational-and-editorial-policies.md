@@ -1,6 +1,6 @@
 # ADR-016 — Owner-approved operational and editorial policies
 
-- **Status:** Accepted by owner; the scheduling policy is implemented 2026-11-15 (UC-10 first slice: explicit IANA timezone, DST gap rejected / overlap resolved by an explicit owner offset choice — never shifted or auto-picked, resolved UTC instant persisted, and remote post-create allowed only until the scheduled instant + 15 minutes inclusive; beyond it the schedule expires and needs renewed approval). The remaining policies (alt text, image metadata, retention, AI configuration, emergency dispatch pause) are still implementation pending
+- **Status:** Accepted by owner; the scheduling policy is implemented 2026-11-15 (UC-10 first slice: explicit IANA timezone, DST gap rejected / overlap resolved by an explicit owner offset choice — never shifted or auto-picked, resolved UTC instant persisted, and remote post-create allowed only until the scheduled instant + 15 minutes inclusive; beyond it the schedule expires and needs renewed approval). The alt-text policy is implemented 2026-11-15 (UC-13 first slice: every attached image requires a meaningful local alt text, enforced at attach time). The remaining policies (image metadata, retention, AI configuration, emergency dispatch pause) are still implementation pending
 - **Date:** 2026-11-13
 - **Amends:** ADR-003, ADR-008, ADR-014 and ADR-015
 

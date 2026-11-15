@@ -32,3 +32,6 @@ app:
   # DeliveryJobService.runDueJobs(now) manually.
   worker:
     enabled: false
+  # UC-13 media library writes to a temp dir in tests.
+  media:
+    dir: ${java.io.tmpdir}/scp-test-media

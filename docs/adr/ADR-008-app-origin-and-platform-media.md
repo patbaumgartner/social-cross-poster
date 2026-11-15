@@ -1,6 +1,6 @@
 # ADR-008 — HTTPS origin, private sources, and platform-hosted images
 
-- **Status:** Accepted; clarified by owner
+- **Status:** Accepted; clarified by owner; the private-source side is implemented 2026-11-15 (UC-13 first slice, Flyway V10: workspace media library on local disk under APP_MEDIA_DIR, authenticated-only download, sha256 dedup, no public URLs — platform-hosted publishing and temporary import grants remain planned)
 - **Date:** 2026-11-13
 
 ## Context

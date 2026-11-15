@@ -24,6 +24,8 @@ import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverride;
+import com.patbaumgartner.socialcrossposter.media.MediaAsset;
+import com.patbaumgartner.socialcrossposter.media.MediaService;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.Publication;
 import com.patbaumgartner.socialcrossposter.publish.PublicationService;
@@ -53,14 +55,18 @@ public class ComposeController {
 
 	private final ScheduleService schedules;
 
+	private final MediaService media;
+
 	public ComposeController(WorkspaceService workspaces, PostService posts, PreviewService previews,
-			ConnectionService connections, PublicationService publications, ScheduleService schedules) {
+			ConnectionService connections, PublicationService publications, ScheduleService schedules,
+			MediaService media) {
 		this.workspaces = workspaces;
 		this.posts = posts;
 		this.previews = previews;
 		this.connections = connections;
 		this.publications = publications;
 		this.schedules = schedules;
+		this.media = media;
 	}
 
 	/** New-post form (UC-04 step 1/3/5): title, default text, destination selection. */
@@ -125,6 +131,12 @@ public class ComposeController {
 				model.addAttribute("overrides", overrides);
 				model.addAttribute("destinations", this.connections.listDestinations(workspace.id()));
 				model.addAttribute("previews", this.previews.previews(workspace.id(), revision, selected, overrides));
+				List<com.patbaumgartner.socialcrossposter.media.RevisionMedia> mediaLinks = this.media
+					.mediaOf(workspace.id(), revision.id());
+				model.addAttribute("mediaLinks", mediaLinks);
+				List<MediaAsset> assets = this.media.assetsOf(workspace.id());
+				model.addAttribute("assets", assets);
+				model.addAttribute("assetsById", assets.stream().collect(Collectors.toMap(MediaAsset::id, (a) -> a)));
 				List<Publication> pubs = this.publications.publicationsOf(workspace.id(), id);
 				Map<Long, List<Delivery>> deliveriesByPublication = pubs.stream()
 					.collect(Collectors.toMap(Publication::id,

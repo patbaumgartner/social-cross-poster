@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.patbaumgartner.socialcrossposter.accounts.AccountRepository;
+import com.patbaumgartner.socialcrossposter.media.RevisionMedia;
+import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
 import com.patbaumgartner.socialcrossposter.platform.PlatformKeys;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
@@ -42,15 +44,18 @@ public class PostService {
 
 	private final AccountRepository accounts;
 
+	private final RevisionMediaRepository revisionMedia;
+
 	public PostService(WorkspaceRepository workspaces, PostRepository posts, PostRevisionRepository revisions,
 			RevisionDestinationRepository destinations, RevisionOverrideRepository overrides,
-			AccountRepository accounts) {
+			AccountRepository accounts, RevisionMediaRepository revisionMedia) {
 		this.workspaces = workspaces;
 		this.posts = posts;
 		this.revisions = revisions;
 		this.destinations = destinations;
 		this.overrides = overrides;
 		this.accounts = accounts;
+		this.revisionMedia = revisionMedia;
 	}
 
 	/**
@@ -70,9 +75,19 @@ public class PostService {
 	@Transactional
 	public Post createPost(Long workspaceId, String title, String defaultText, Set<Long> accountIds,
 			List<RevisionOverride> overrideRequests) {
+		return createPost(workspaceId, title, defaultText, accountIds, overrideRequests, null);
+	}
+
+	/**
+	 * Creates a new post whose first revision also inherits the media links of
+	 * {@code mediaSourceRevisionId} (UC-11 duplicate, UC-13). Null means no media.
+	 */
+	@Transactional
+	public Post createPost(Long workspaceId, String title, String defaultText, Set<Long> accountIds,
+			List<RevisionOverride> overrideRequests, Long mediaSourceRevisionId) {
 		OffsetDateTime now = OffsetDateTime.now();
 		Post post = this.posts.save(new Post(null, workspaceId, title, STATE_DRAFT, null, 0L, now, now));
-		PostRevision revision = saveRevision(post, defaultText, accountIds, overrideRequests);
+		PostRevision revision = saveRevision(post, defaultText, accountIds, overrideRequests, mediaSourceRevisionId);
 		Post saved = new Post(post.id(), post.workspaceId(), post.title(), post.state(), revision.id(),
 				post.version() + 1, post.createdAt(), OffsetDateTime.now());
 		return this.posts.save(saved);
@@ -85,6 +100,21 @@ public class PostService {
 	@Transactional
 	public PostRevision saveRevision(Post post, String defaultText, Set<Long> accountIds,
 			List<RevisionOverride> overrideRequests) {
+		// A normal save inherits the media attachments of the revision it supersedes
+		// (UC-13): the new revision gets its own copy of the link set.
+		return saveRevision(post, defaultText, accountIds, overrideRequests, post.currentRevisionId());
+	}
+
+	/**
+	 * Saves a post as a new immutable revision (next revision_no), replacing the selected
+	 * destinations and overrides of that new revision only (ADR-015), and copying the
+	 * media links of {@code mediaSourceRevisionId} (the superseded revision on a normal
+	 * save, the restored/duplicated source revision on UC-09/UC-11 — null means no
+	 * media).
+	 */
+	@Transactional
+	public PostRevision saveRevision(Post post, String defaultText, Set<Long> accountIds,
+			List<RevisionOverride> overrideRequests, Long mediaSourceRevisionId) {
 		PostRevision current = this.revisions.findTopByPostIdOrderByRevisionNoDesc(post.id()).orElse(null);
 		int nextNo = current == null ? 1 : current.revisionNo() + 1;
 		validateDestinations(post.workspaceId(), accountIds);
@@ -98,6 +128,12 @@ public class PostService {
 		for (RevisionOverride o : validated) {
 			this.overrides
 				.save(new RevisionOverride(null, post.workspaceId(), revision.id(), o.target(), o.text(), now));
+		}
+		if (mediaSourceRevisionId != null) {
+			for (RevisionMedia link : this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(mediaSourceRevisionId)) {
+				this.revisionMedia.save(new RevisionMedia(null, post.workspaceId(), revision.id(), link.mediaId(),
+						link.position(), link.altText(), now));
+			}
 		}
 		Post saved = new Post(post.id(), post.workspaceId(), post.title(), post.state(), revision.id(),
 				post.version() + 1, post.createdAt(), OffsetDateTime.now());
@@ -142,7 +178,7 @@ public class PostService {
 			.map(RevisionDestination::accountId)
 			.collect(Collectors.toSet());
 		List<RevisionOverride> copiedOverrides = this.overrides.findAllByRevisionId(source.id());
-		return saveRevision(post, source.defaultText(), accountIds, copiedOverrides);
+		return saveRevision(post, source.defaultText(), accountIds, copiedOverrides, source.id());
 	}
 
 	/**
@@ -166,7 +202,7 @@ public class PostService {
 		List<RevisionOverride> copiedOverrides = this.overrides.findAllByRevisionId(current.id());
 		String copyTitle = source.title() == null || source.title().isBlank() ? "Post copy"
 				: source.title() + " (copy)";
-		return createPost(workspaceId, copyTitle, current.defaultText(), accountIds, copiedOverrides);
+		return createPost(workspaceId, copyTitle, current.defaultText(), accountIds, copiedOverrides, current.id());
 	}
 
 	/**
