@@ -50,6 +50,10 @@
               th:action="@{/w/{slug}/history/{pub}/deliveries/{did}/reconcile(slug=${workspace.slug},pub=${detail.publication.id},did=${dd.delivery.id})}">
           <button type="submit">Reconcile</button>
         </form>
+        <a th:if="${canEditByDelivery[dd.delivery.id]}"
+           th:href="@{/w/{slug}/history/{pub}/deliveries/{did}/edit(slug=${workspace.slug},pub=${detail.publication.id},did=${dd.delivery.id})}"><button type="button">Edit remote</button></a>
+        <a th:if="${canDeleteByDelivery[dd.delivery.id]}"
+           th:href="@{/w/{slug}/history/{pub}/deliveries/{did}/delete(slug=${workspace.slug},pub=${detail.publication.id},did=${dd.delivery.id})}"><button type="button">Delete remote</button></a>
         <table th:if="${!dd.attempts.isEmpty()}">
           <thead>
             <tr><th>#</th><th>Stage</th><th>Outcome</th><th>Detail (redacted)</th><th>External ref</th><th>At</th></tr>
@@ -66,6 +70,29 @@
           </tbody>
         </table>
         <p th:if="${dd.attempts.isEmpty()}"><em>No attempts recorded.</em></p>
+        <div th:if="${actionsByDelivery[dd.delivery.id] != null and !actionsByDelivery[dd.delivery.id].isEmpty()}">
+          <h4>Remote actions (separate records — the delivery above is preserved, ADR-015)</h4>
+          <table>
+            <thead>
+              <tr><th>Action</th><th>State</th><th>Replacement payload</th><th>Attempts (redacted)</th><th>External ref</th><th>At</th></tr>
+            </thead>
+            <tbody>
+              <tr th:each="ra : ${actionsByDelivery[dd.delivery.id]}">
+                <td th:text="${ra.action.action}">EDIT</td>
+                <td><span class="badge" th:text="${ra.action.state}">SUCCESS</span></td>
+                <td><pre th:if="${ra.action.payloadText != null}" th:text="${ra.action.payloadText}">new text</pre><em th:if="${ra.action.payloadText == null}">—</em></td>
+                <td>
+                  <ul th:if="${!ra.attempts.isEmpty()}">
+                    <li th:each="at : ${ra.attempts}" th:text="${'#' + at.attemptNo + ' ' + at.stage + ' → ' + at.outcome + (at.detail != null ? ' — ' + at.detail : '')}">attempt</li>
+                  </ul>
+                  <em th:if="${ra.attempts.isEmpty()}">no attempts</em>
+                </td>
+                <td><code th:if="${ra.action.externalRef != null}" th:text="${ra.action.externalRef}">ref</code></td>
+                <td><small th:text="${#temporals.format(ra.action.updatedAt, 'yyyy-MM-dd HH:mm:ss')}">time</small></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>

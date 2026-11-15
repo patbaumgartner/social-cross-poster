@@ -30,6 +30,8 @@ import com.patbaumgartner.socialcrossposter.content.RevisionDestinationRepositor
 import com.patbaumgartner.socialcrossposter.content.RevisionOverrideRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
+import com.patbaumgartner.socialcrossposter.publish.RemoteActionAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.RemoteActionRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryRepository;
 import com.patbaumgartner.socialcrossposter.publish.PublicationRepository;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
@@ -102,12 +104,20 @@ class PostFlowTest {
 	@Autowired
 	DeliveryJobRepository jobs;
 
+	@Autowired
+	RemoteActionRepository remoteActions;
+
+	@Autowired
+	RemoteActionAttemptRepository remoteActionAttempts;
+
 	@BeforeEach
 	@AfterEach
 	void resetState() {
 		// The H2 in-memory database is shared across tests in this context; clean in
 		// FK-safe order before and after each test so other test classes (accounts,
 		// contacts) are never affected by leftover post rows.
+		this.remoteActionAttempts.deleteAll();
+		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();
 		this.attempts.deleteAll();
 		this.deliveries.deleteAll();
