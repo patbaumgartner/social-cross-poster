@@ -4,9 +4,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -19,6 +21,9 @@ import com.patbaumgartner.socialcrossposter.accounts.ConnectionRepository;
 import com.patbaumgartner.socialcrossposter.accounts.SecretCipher;
 import com.patbaumgartner.socialcrossposter.contacts.MentionResolver;
 import com.patbaumgartner.socialcrossposter.content.DestinationPreview;
+import com.patbaumgartner.socialcrossposter.media.MediaAsset;
+import com.patbaumgartner.socialcrossposter.media.MediaService;
+import com.patbaumgartner.socialcrossposter.media.RevisionMedia;
 import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
 import com.patbaumgartner.socialcrossposter.content.Post;
 import com.patbaumgartner.socialcrossposter.content.PostRevision;
@@ -26,6 +31,7 @@ import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverride;
+import com.patbaumgartner.socialcrossposter.platform.MediaAttachment;
 import com.patbaumgartner.socialcrossposter.platform.PlatformPublisher;
 import com.patbaumgartner.socialcrossposter.platform.PlatformReconciler;
 import com.patbaumgartner.socialcrossposter.platform.PublishContext;
@@ -123,18 +129,23 @@ public class PublicationService {
 
 	private final RevisionMediaRepository revisionMedia;
 
+	private final DeliveryMediaRepository deliveryMedia;
+
+	private final MediaService media;
+
 	/**
-	 * UC-13 first slice: revisions with attached media are blocked from publishing
-	 * fail-closed until the platform upload/import slice lands.
+	 * UC-13: fail-closed blocker template (platform name formatted in) when a selected
+	 * destination's platform cannot upload the revision's attached images. Platforms with
+	 * {@link PlatformPublisher#supportsMediaUpload()} (telegram) are not blocked.
 	 */
-	public static final String BLOCKER_MEDIA_NOT_PUBLISHED = "This revision has attached images, but platform "
-			+ "media upload is not implemented yet (UC-13 later slice) — detach the images or publish a "
-			+ "text-only revision.";
+	public static final String BLOCKER_MEDIA_PLATFORM = "Attached images cannot be uploaded to platform '%s' yet "
+			+ "(UC-13 later slice) — detach the images or remove that destination.";
 
 	public PublicationService(PostService posts, PreviewService previewService, MentionResolver mentions,
 			AccountRepository accounts, ConnectionRepository connections, SecretCipher secrets,
 			PublisherRegistry publishers, ReconcilerRegistry reconcilers, PublicationRepository publications,
-			DeliveryRepository deliveries, DeliveryAttemptRepository attempts, RevisionMediaRepository revisionMedia) {
+			DeliveryRepository deliveries, DeliveryAttemptRepository attempts, RevisionMediaRepository revisionMedia,
+			DeliveryMediaRepository deliveryMedia, MediaService media) {
 		this.posts = posts;
 		this.previewService = previewService;
 		this.mentions = mentions;
@@ -147,6 +158,8 @@ public class PublicationService {
 		this.deliveries = deliveries;
 		this.attempts = attempts;
 		this.revisionMedia = revisionMedia;
+		this.deliveryMedia = deliveryMedia;
+		this.media = media;
 	}
 
 	/**
@@ -189,15 +202,14 @@ public class PublicationService {
 			throw new PublicationException("Select at least one destination before publishing.");
 		}
 		List<DestinationPreview> previews = previewsFor(workspaceId, revision);
-		List<String> blockers = new java.util.ArrayList<>(blockersOf(previews));
-		if (!this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revision.id()).isEmpty()) {
-			blockers.add(BLOCKER_MEDIA_NOT_PUBLISHED);
-		}
+		List<String> blockers = new ArrayList<>(blockersOf(previews));
+		blockers.addAll(mediaBlockersOf(workspaceId, destinations, revision.id()));
 		if (!blockers.isEmpty()) {
 			throw new PublicationException("Publishing is blocked: " + String.join(" ", blockers));
 		}
 		List<Payload> payloads = payloadsFor(workspaceId, previews);
-		String payloadHash = hashOf(payloads);
+		List<ResolvedMedia> media = resolvedMedia(workspaceId, revision.id());
+		String payloadHash = payloadHash(workspaceId, revision, previews, media);
 		Optional<Publication> existing = this.publications.findByWorkspaceIdAndSubmissionKey(workspaceId,
 				submissionKey);
 		if (existing.isPresent()) {
@@ -213,9 +225,15 @@ public class PublicationService {
 		for (Payload payload : payloads) {
 			AccountDestination destination = payload.destination();
 			boolean usable = destination.enabled() && !destination.archived();
-			this.deliveries.save(new Delivery(null, workspaceId, publication.id(), destination.id(),
+			Delivery saved = this.deliveries.save(new Delivery(null, workspaceId, publication.id(), destination.id(),
 					destination.platform(), destination.label(), destination.host(), destination.providerAccountId(),
 					payload.text(), payload.hash(), usable ? D_PENDING : D_SKIPPED, null, now, now));
+			// UC-13: snapshot the approved attached images on the delivery (immutable,
+			// ADR-015) so retries resend exactly these images.
+			for (int i = 0; i < media.size(); i++) {
+				this.deliveryMedia.save(new DeliveryMedia(null, workspaceId, saved.id(), i + 1, media.get(i).sha256(),
+						media.get(i).altText(), now));
+			}
 		}
 		return publication;
 	}
@@ -226,21 +244,61 @@ public class PublicationService {
 	 */
 	public List<String> blockersOf(Long workspaceId, Long revisionId) {
 		PostRevision revision = this.posts.requireRevisionById(workspaceId, revisionId);
-		List<String> blockers = new java.util.ArrayList<>(blockersOf(previewsFor(workspaceId, revision)));
-		if (!this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revisionId).isEmpty()) {
-			blockers.add(BLOCKER_MEDIA_NOT_PUBLISHED);
-		}
+		List<String> blockers = new ArrayList<>(blockersOf(previewsFor(workspaceId, revision)));
+		blockers.addAll(mediaBlockersOf(workspaceId, this.posts.destinationsOf(revisionId), revisionId));
 		return blockers;
 	}
 
 	/**
-	 * SHA-256 over the mention-rendered payloads of one revision — the semantic payload
-	 * hash bound to a UC-10 schedule at approval and recomputed at dispatch (UC-10 step
-	 * 5: a changed hash marks the schedule NEEDS_REVIEW instead of dispatching).
+	 * SHA-256 over the mention-rendered payloads of one revision plus the content hashes
+	 * of its attached images — the semantic payload hash bound to a UC-10 schedule at
+	 * approval and recomputed at dispatch (UC-10 step 5: a changed hash, including a
+	 * changed image, marks the schedule NEEDS_REVIEW instead of dispatching).
 	 */
 	public String payloadHashFor(Long workspaceId, Long revisionId) {
 		PostRevision revision = this.posts.requireRevisionById(workspaceId, revisionId);
-		return hashOf(payloadsFor(workspaceId, previewsFor(workspaceId, revision)));
+		return payloadHash(workspaceId, revision, previewsFor(workspaceId, revision),
+				resolvedMedia(workspaceId, revisionId));
+	}
+
+	/**
+	 * UC-13: fail-closed blockers for attached images — every selected destination's
+	 * platform must have a wired publisher that supports media upload, otherwise the
+	 * platform name is reported (first slice blocked all media unconditionally).
+	 */
+	private List<String> mediaBlockersOf(Long workspaceId, List<RevisionDestination> destinations, Long revisionId) {
+		if (this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revisionId).isEmpty()) {
+			return List.of();
+		}
+		Set<String> unsupported = new TreeSet<>();
+		for (RevisionDestination rd : destinations) {
+			this.accounts.findByIdAndWorkspaceId(rd.accountId(), workspaceId).ifPresent((acc) -> {
+				Optional<PlatformPublisher> pub = this.publishers.find(acc.platform());
+				if (pub.isEmpty() || !pub.get().supportsMediaUpload()) {
+					unsupported.add(acc.platform());
+				}
+			});
+		}
+		return unsupported.stream().map((p) -> BLOCKER_MEDIA_PLATFORM.formatted(p)).toList();
+	}
+
+	/**
+	 * Resolves the revision's media links to content hashes + alt texts (fail-closed on a
+	 * missing asset).
+	 */
+	private List<ResolvedMedia> resolvedMedia(Long workspaceId, Long revisionId) {
+		return this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revisionId)
+			.stream()
+			.map((link) -> new ResolvedMedia(this.media.requireAsset(workspaceId, link.mediaId()).sha256(),
+					link.altText()))
+			.toList();
+	}
+
+	private String payloadHash(Long workspaceId, PostRevision revision, List<DestinationPreview> previews,
+			List<ResolvedMedia> media) {
+		String textHash = hashOf(payloadsFor(workspaceId, previews));
+		String mediaHash = media.stream().map(ResolvedMedia::sha256).collect(Collectors.joining(","));
+		return sha256Hex(textHash + "|" + mediaHash);
 	}
 
 	private List<DestinationPreview> previewsFor(Long workspaceId, PostRevision revision) {
@@ -385,9 +443,17 @@ public class PublicationService {
 					"No publisher wired for platform '" + delivery.platform() + "' — review required.", null, now);
 			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
 		}
+		// UC-13: resolve the approved media snapshot back to the private source bytes;
+		// a missing source fails closed without a remote write (ADR-008).
+		List<MediaAttachment> media = mediaAttachmentsOf(workspaceId, delivery);
+		if (media == null) {
+			recordAttempt(workspaceId, delivery.id(), attemptNo, "authorize", "FAILED",
+					"An attached image is no longer available in the private library — review required.", null, now);
+			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+		}
 		PublishResult result = publisherOpt.get()
 			.publish(new PublishContext(credential, delivery.providerAccountId(), delivery.payloadText(),
-					delivery.publicationId() + ":" + delivery.id()));
+					delivery.publicationId() + ":" + delivery.id(), media));
 		recordAttempt(workspaceId, delivery.id(), attemptNo, "send", result.outcome().name(), result.detail(),
 				result.externalRef(), now);
 		String state = switch (result.outcome()) {
@@ -532,7 +598,33 @@ public class PublicationService {
 		}
 	}
 
+	/**
+	 * Resolves the delivery's media snapshot to private source bytes for the upload
+	 * (UC-13 second slice). Returns {@code null} when an approved image is no longer in
+	 * the workspace library — the caller fails closed (NEEDS_REVIEW, no remote write).
+	 */
+	private List<MediaAttachment> mediaAttachmentsOf(Long workspaceId, Delivery delivery) {
+		List<DeliveryMedia> rows = this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(delivery.id());
+		if (rows.isEmpty()) {
+			return List.of();
+		}
+		List<MediaAttachment> result = new ArrayList<>(rows.size());
+		for (DeliveryMedia row : rows) {
+			MediaAsset asset = this.media.findBySha(workspaceId, row.sha256()).orElse(null);
+			if (asset == null) {
+				return null;
+			}
+			result.add(new MediaAttachment(asset.filename(), asset.contentType(),
+					this.media.fileBytes(workspaceId, asset.id()), row.altText()));
+		}
+		return result;
+	}
+
 	private record Payload(AccountDestination destination, String text, String hash) {
+
+	}
+
+	private record ResolvedMedia(String sha256, String altText) {
 
 	}
 

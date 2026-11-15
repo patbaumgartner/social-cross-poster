@@ -100,6 +100,15 @@ public class MediaService {
 			.orElseThrow(() -> new MediaException("Unknown media asset for this workspace."));
 	}
 
+	/**
+	 * Asset lookup by content hash within the workspace — used by the dispatch path to
+	 * resolve the {@code delivery_media} snapshot back to the private source bytes (UC-13
+	 * second slice, ADR-008).
+	 */
+	public Optional<MediaAsset> findBySha(Long workspaceId, String sha256) {
+		return this.assets.findByWorkspaceIdAndSha256(workspaceId, sha256);
+	}
+
 	/** Media links of one revision in order. */
 	public List<RevisionMedia> mediaOf(Long workspaceId, Long revisionId) {
 		this.posts.requireRevisionById(workspaceId, revisionId);
