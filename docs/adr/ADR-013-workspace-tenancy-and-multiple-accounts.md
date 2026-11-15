@@ -1,6 +1,6 @@
 # ADR-013 — One owner per installation; workspaces isolate account sets
 
-- **Status:** Accepted; clarified by owner; fail-closed workspace scoping is implemented since 2026-11-14 — every service lookup is workspace-scoped and foreign ids throw (including the UC-06 history list/detail, the UC-07 retry/reconcile owner actions, the UC-08 remote edit/delete actions, the UC-09 restore/conflict paths and the UC-10 schedule/cancel/dispatch paths added 2026-11-15)
+- **Status:** Accepted; clarified by owner; fail-closed workspace scoping is implemented since 2026-11-14 — every service lookup is workspace-scoped and foreign ids throw (including the UC-06 history list/detail, the UC-07 retry/reconcile owner actions, the UC-08 remote edit/delete actions, the UC-09 restore/conflict paths, the UC-10 schedule/cancel/dispatch paths and the UC-11 duplicate path added 2026-11-15 — duplication always stays in the source workspace, a foreign post id fails closed)
 - **Date:** 2026-11-13
 - **Amends:** ADR-004 and ADR-005
 
