@@ -8,7 +8,7 @@ scaffolding, UC-01 (login + workspace picker), the first UC-02 slice
 (contacts, handles, mention tokens + previews), the first UC-04 slice
 (immutable revisions + per-destination previews) and the first UC-05 slice
 (publish now: idempotent submissions, telegram text delivery + states)
-the first UC-06 slice (history: read-only filtered/paginated publication list + fail-closed detail), the first UC-07 slice (durable retry jobs/worker, bounded backoff, owner retry/reconcile, UNKNOWN reconciliation) the first UC-08 slice (remote edit/delete on confirmed deliveries, separate action records, original delivery preserved) and the first UC-09 slice (restore earlier revision as a new revision, optimistic conflict guard) implemented** (2026-11-14; UC-06/UC-07/UC-08/UC-09 2026-11-15).
+the first UC-06 slice (history: read-only filtered/paginated publication list + fail-closed detail), the first UC-07 slice (durable retry jobs/worker, bounded backoff, owner retry/reconcile, UNKNOWN reconciliation) the first UC-08 slice (remote edit/delete on confirmed deliveries, separate action records, original delivery preserved), the first UC-09 slice (restore earlier revision as a new revision, optimistic conflict guard) and the first UC-10 slice (one-time schedules: explicit timezone/DST choice, frozen payload hash, at-most-one publication within the +15 min cutoff) implemented** (2026-11-14; UC-06/UC-07/UC-08/UC-09/UC-10 2026-11-15).
 There is a Compose baseline (`docker-compose.yml`) but no published release
 image yet — see the [README](README.md) status note and [Plan.md](Plan.md) for
 the delivery roadmap and acceptance gates.

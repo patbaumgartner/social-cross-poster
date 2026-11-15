@@ -76,6 +76,47 @@
     </section>
 
     <section class="card">
+      <h2>Schedule (UC-10)</h2>
+      <p>One-time publication of the current revision at a local time with an explicit IANA
+        timezone (default: the workspace timezone <code th:text="${workspace.timezone}">Europe/Zurich</code>).
+        The UTC instant is fixed at approval. DST gaps are rejected and overlaps require an explicit
+        offset choice — times are never shifted automatically (ADR-016). Dispatch is best-effort:
+        remote post-create is allowed until 15 minutes after the scheduled instant; later it needs
+        renewed approval (ADR-016).</p>
+      <form method="post" th:action="@{/w/{slug}/posts/{id}/schedule(slug=${workspace.slug},id=${post.id})}">
+        <div class="field">
+          <label for="localDateTime">Local date/time</label>
+          <input id="localDateTime" name="localDateTime" type="datetime-local" required>
+        </div>
+        <div class="field">
+          <label for="timezone">IANA timezone</label>
+          <input id="timezone" name="timezone" type="text" th:value="${workspace.timezone}" required>
+        </div>
+        <div class="field">
+          <label for="offset">Offset (only for a DST overlap, e.g. +02:00)</label>
+          <input id="offset" name="offset" type="text" placeholder="+02:00">
+        </div>
+        <button class="primary" type="submit">Schedule publication…</button>
+      </form>
+      <h3>Schedules of this post</h3>
+      <p th:if="${schedules.isEmpty()}"><em>No schedules yet.</em></p>
+      <ul th:if="${!schedules.isEmpty()}">
+        <li th:each="s : ${schedules}">
+          <span class="badge" th:text="${s.state}">PENDING</span>
+          <span th:text="${s.localDateTime}">2030-01-15T18:30</span>
+          <code th:text="${s.timezone}">Europe/Zurich</code>
+          &rarr; <span th:text="${s.scheduledAt}">2030-01-15T17:30Z</span> UTC
+          · revision #<span th:text="${s.revisionId}">1</span>
+          <span th:if="${s.publicationId != null}">· publication #<span th:text="${s.publicationId}">7</span></span>
+          <form th:if="${s.state == 'PENDING'}" method="post" style="display:inline"
+                th:action="@{/w/{slug}/schedules/{sid}/cancel(slug=${workspace.slug},sid=${s.id})}">
+            <button type="submit">Cancel</button>
+          </form>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card">
       <h2>Revisions</h2>
       <ul>
         <li th:each="r : ${revisions}">
