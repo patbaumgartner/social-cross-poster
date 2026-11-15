@@ -66,16 +66,23 @@ public class MediaController {
 	 */
 	@GetMapping("/w/{slug}/media/{mediaId}/file")
 	public ResponseEntity<ByteArrayResource> file(@PathVariable String slug, @PathVariable Long mediaId) {
+		// Foreign workspace or unknown asset both map to 404 — existence is not leaked
+		// across workspaces (ADR-013).
 		return this.workspaces.findBySlug(slug).map((workspace) -> {
-			MediaAsset asset = this.media.requireAsset(workspace.id(), mediaId);
-			ByteArrayResource body = new ByteArrayResource(this.media.fileBytes(workspace.id(), mediaId));
-			return ResponseEntity.ok()
-				.contentType(MediaType.parseMediaType(asset.contentType()))
-				.contentLength(asset.sizeBytes())
-				.header(HttpHeaders.CONTENT_DISPOSITION,
-						"inline; filename=\"" + asset.filename().replace("\"", "_") + "\"")
-				.cacheControl(org.springframework.http.CacheControl.noCache())
-				.body(body);
+			try {
+				MediaAsset asset = this.media.requireAsset(workspace.id(), mediaId);
+				ByteArrayResource body = new ByteArrayResource(this.media.fileBytes(workspace.id(), mediaId));
+				return ResponseEntity.ok()
+					.contentType(MediaType.parseMediaType(asset.contentType()))
+					.contentLength(asset.sizeBytes())
+					.header(HttpHeaders.CONTENT_DISPOSITION,
+							"inline; filename=\"" + asset.filename().replace("\"", "_") + "\"")
+					.cacheControl(org.springframework.http.CacheControl.noCache())
+					.body(body);
+			}
+			catch (MediaException ex) {
+				return ResponseEntity.notFound().<ByteArrayResource>build();
+			}
 		}).orElse(ResponseEntity.notFound().build());
 	}
 

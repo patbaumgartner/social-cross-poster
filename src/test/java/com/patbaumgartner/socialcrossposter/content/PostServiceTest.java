@@ -11,6 +11,7 @@ import org.mockito.ArgumentCaptor;
 
 import com.patbaumgartner.socialcrossposter.accounts.AccountDestination;
 import com.patbaumgartner.socialcrossposter.accounts.AccountRepository;
+import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,6 +57,8 @@ class PostServiceTest {
 
 	private AccountRepository accounts;
 
+	private RevisionMediaRepository revisionMedia;
+
 	private PostService service;
 
 	@BeforeEach
@@ -65,9 +68,10 @@ class PostServiceTest {
 		this.destinations = mock(RevisionDestinationRepository.class);
 		this.overrides = mock(RevisionOverrideRepository.class);
 		this.accounts = mock(AccountRepository.class);
+		this.revisionMedia = mock(RevisionMediaRepository.class);
 		WorkspaceRepository workspaces = mock(WorkspaceRepository.class);
 		this.service = new PostService(workspaces, this.posts, this.revisions, this.destinations, this.overrides,
-				this.accounts);
+				this.accounts, this.revisionMedia);
 		given(this.posts.save(any(Post.class))).willAnswer((inv) -> inv.getArgument(0));
 		given(this.revisions.save(any(PostRevision.class))).willAnswer((inv) -> {
 			PostRevision r = inv.getArgument(0);

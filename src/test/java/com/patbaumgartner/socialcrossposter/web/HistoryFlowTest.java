@@ -12,6 +12,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import com.patbaumgartner.socialcrossposter.notify.NotificationEventRepository;
+import com.patbaumgartner.socialcrossposter.media.MediaAssetRepository;
+import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.patbaumgartner.socialcrossposter.accounts.AccountDestination;
@@ -119,11 +121,21 @@ class HistoryFlowTest {
 	@Autowired
 	NotificationEventRepository notificationEvents;
 
+	@Autowired
+	RevisionMediaRepository revisionMedia;
+
+	@Autowired
+	MediaAssetRepository mediaAssets;
+
 	@BeforeEach
 	@AfterEach
 	void resetState() {
 		// notification_event references publication/delivery/schedule, so it goes first.
 		this.notificationEvents.deleteAll();
+		// revision_media references post_revision/media_asset — delete links, then
+		// assets.
+		this.revisionMedia.deleteAll();
+		this.mediaAssets.deleteAll();
 		this.remoteActionAttempts.deleteAll();
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();

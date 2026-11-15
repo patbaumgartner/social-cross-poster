@@ -14,6 +14,7 @@ import com.patbaumgartner.socialcrossposter.accounts.Connection;
 import com.patbaumgartner.socialcrossposter.accounts.ConnectionRepository;
 import com.patbaumgartner.socialcrossposter.accounts.SecretCipher;
 import com.patbaumgartner.socialcrossposter.contacts.MentionResolver;
+import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
 import com.patbaumgartner.socialcrossposter.content.DestinationPreview;
 import com.patbaumgartner.socialcrossposter.content.Post;
 import com.patbaumgartner.socialcrossposter.content.PostException;
@@ -96,6 +97,8 @@ class PublicationServiceTest {
 
 	private DeliveryAttemptRepository attempts;
 
+	private RevisionMediaRepository revisionMedia;
+
 	private PlatformPublisher publisher;
 
 	private ReconcilerRegistry reconcilers;
@@ -125,11 +128,12 @@ class PublicationServiceTest {
 		this.publications = mock(PublicationRepository.class);
 		this.deliveries = mock(DeliveryRepository.class);
 		this.attempts = mock(DeliveryAttemptRepository.class);
+		this.revisionMedia = mock(RevisionMediaRepository.class);
 		this.publisher = mock(PlatformPublisher.class);
 		this.reconciler = mock(PlatformReconciler.class);
 		this.service = new PublicationService(this.posts, this.previewService, this.mentions, this.accounts,
 				this.connections, this.secrets, this.publishers, this.reconcilers, this.publications, this.deliveries,
-				this.attempts);
+				this.attempts, this.revisionMedia);
 
 		this.post = new Post(POST_ID, WS, "Title", PostService.STATE_DRAFT, REVISION_ID, 1L, NOW, NOW);
 		this.revision = new PostRevision(REVISION_ID, WS, POST_ID, 1, "hello", NOW);
