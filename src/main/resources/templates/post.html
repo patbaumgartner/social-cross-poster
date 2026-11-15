@@ -17,6 +17,7 @@
         (ADR-015). Previews below use the saved revision; use “Refresh preview” to preview
         unsaved text.</p>
       <form id="post-form" method="post" th:action="@{/w/{slug}/posts/{id}(slug=${workspace.slug},id=${post.id})}">
+        <input type="hidden" name="expectedVersion" th:value="${post.version}">
         <div class="field">
           <label for="title">Title</label>
           <input id="title" name="title" type="text" maxlength="200" th:value="${post.title}">

@@ -106,6 +106,26 @@ public class PostService {
 	}
 
 	/**
+	 * Optimistic-locking save (UC-09 alternative flow 1): like {@link #saveRevision}, but
+	 * only when the post's optimistic version still equals {@code expectedVersion}. On a
+	 * mismatch nothing is saved — both tabs' edits are preserved as separate immutable
+	 * revisions and the caller is told to reload; never last-write-wins.
+	 */
+	@Transactional
+	public PostRevision saveRevisionIfVersion(Post post, long expectedVersion, String defaultText, Set<Long> accountIds,
+			List<RevisionOverride> overrideRequests) {
+		if (post.version() != expectedVersion) {
+			int currentNo = this.revisions.findTopByPostIdOrderByRevisionNoDesc(post.id())
+				.map(PostRevision::revisionNo)
+				.orElse(0);
+			throw new PostException("Conflict: this post was changed elsewhere (expected version " + expectedVersion
+					+ ", current version " + post.version() + ", now at revision #" + currentNo
+					+ "). Nothing was saved — reload to see the newer revision; every version is preserved as a revision.");
+		}
+		return saveRevision(post, defaultText, accountIds, overrideRequests);
+	}
+
+	/**
 	 * Restores an earlier revision as a NEW revision (UC-09 step 4): the default text,
 	 * selected destinations and layered overrides of {@code revisionId} are copied into
 	 * the next immutable revision and the current-revision pointer moves there. Nothing

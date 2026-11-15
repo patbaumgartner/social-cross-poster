@@ -136,16 +136,23 @@ public class ComposeController {
 		}).orElse("redirect:/");
 	}
 
-	/** Saves the post as a new immutable revision (next revision_no), never in place. */
+	/**
+	 * Saves the post as a new immutable revision (next revision_no), never in place. The
+	 * form sends the post's optimistic {@code expectedVersion}; on a concurrent-change
+	 * conflict nothing is saved (UC-09 alternative flow 1 — never last-write-wins).
+	 */
 	@PostMapping("/w/{slug}/posts/{id}")
 	public String save(@PathVariable String slug, @PathVariable Long id, @RequestParam(required = false) String title,
 			@RequestParam(required = false) String text, @RequestParam(required = false) List<Long> accountIds,
-			RedirectAttributes redirect) {
+			@RequestParam(required = false) Long expectedVersion, RedirectAttributes redirect) {
 		return withWorkspace(slug, (workspace) -> {
 			try {
 				Post post = this.posts.requirePost(workspace.id(), id);
-				PostRevision revision = this.posts.saveRevision(post, text == null ? "" : text,
-						accountIds == null ? Set.of() : new TreeSet<>(accountIds), List.of());
+				Set<Long> selected = accountIds == null ? Set.of() : new TreeSet<>(accountIds);
+				PostRevision revision = expectedVersion == null
+						? this.posts.saveRevision(post, text == null ? "" : text, selected, List.of())
+						: this.posts.saveRevisionIfVersion(post, expectedVersion, text == null ? "" : text, selected,
+								List.of());
 				if (StringUtils.hasText(title) && !title.equals(post.title())) {
 					// title lives on the post container; update it together with the new
 					// revision
