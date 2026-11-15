@@ -136,8 +136,7 @@ public class PostService {
 	@Transactional
 	public PostRevision restoreRevision(Long workspaceId, Long postId, Long revisionId) {
 		Post post = requirePost(workspaceId, postId);
-		PostRevision source = this.revisions.findByIdAndWorkspaceIdAndPostId(revisionId, workspaceId, postId)
-			.orElseThrow(() -> new PostException("Unknown revision for this post."));
+		PostRevision source = requireRevision(workspaceId, postId, revisionId);
 		Set<Long> accountIds = this.destinations.findAllByRevisionId(source.id())
 			.stream()
 			.map(RevisionDestination::accountId)
@@ -170,6 +169,18 @@ public class PostService {
 			throw new PostException("This post has no revision yet.");
 		}
 		return this.revisions.findByIdAndWorkspaceId(post.currentRevisionId(), workspaceId)
+			.orElseThrow(() -> new PostException("Unknown revision for this workspace."));
+	}
+
+	/** Loads a revision of a post, fail-closed for foreign workspaces/posts (ADR-013). */
+	public PostRevision requireRevision(Long workspaceId, Long postId, Long revisionId) {
+		return this.revisions.findByIdAndWorkspaceIdAndPostId(revisionId, workspaceId, postId)
+			.orElseThrow(() -> new PostException("Unknown revision for this post."));
+	}
+
+	/** Loads a revision by id, fail-closed for foreign workspaces (ADR-013). */
+	public PostRevision requireRevisionById(Long workspaceId, Long revisionId) {
+		return this.revisions.findByIdAndWorkspaceId(revisionId, workspaceId)
 			.orElseThrow(() -> new PostException("Unknown revision for this workspace."));
 	}
 

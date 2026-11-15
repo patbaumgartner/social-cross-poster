@@ -139,6 +139,21 @@ public class PublicationService {
 
 	/**
 	 * Creates a publication for the post's current revision under the workspace-scoped
+	 * {@code submissionKey}. Delegates to the revision-pinned overload.
+	 */
+	@Transactional
+	public Publication create(Long workspaceId, String workspaceSlug, Long postId, String submissionKey) {
+		Post post = this.posts.requirePost(workspaceId, postId);
+		if (PostService.STATE_ARCHIVED.equals(post.state())) {
+			throw new PublicationException("Archived posts cannot be published.");
+		}
+		return create(workspaceId, workspaceSlug, postId, this.posts.currentRevision(workspaceId, postId).id(),
+				submissionKey);
+	}
+
+	/**
+	 * Creates a publication for an explicit (frozen) revision — used by UC-10 schedules,
+	 * which pin the approved revision at approval time — under the workspace-scoped
 	 * {@code submissionKey}, snapshotting one immutable delivery payload per selected
 	 * destination. Idempotent per ADR-015: same key + same payload hash returns the
 	 * existing publication; same key + different hash is rejected. Blocking previews
@@ -146,7 +161,8 @@ public class PublicationService {
 	 * SKIPPED delivery without a remote write.
 	 */
 	@Transactional
-	public Publication create(Long workspaceId, String workspaceSlug, Long postId, String submissionKey) {
+	public Publication create(Long workspaceId, String workspaceSlug, Long postId, Long revisionId,
+			String submissionKey) {
 		if (submissionKey == null || submissionKey.isBlank()) {
 			throw new PublicationException("A submission key is required.");
 		}
@@ -154,24 +170,18 @@ public class PublicationService {
 		if (PostService.STATE_ARCHIVED.equals(post.state())) {
 			throw new PublicationException("Archived posts cannot be published.");
 		}
-		PostRevision revision = this.posts.currentRevision(workspaceId, postId);
+		PostRevision revision = this.posts.requireRevision(workspaceId, postId, revisionId);
 		List<RevisionDestination> destinations = this.posts.destinationsOf(revision.id());
 		if (destinations.isEmpty()) {
 			throw new PublicationException("Select at least one destination before publishing.");
 		}
-		List<RevisionOverride> overrides = this.posts.overridesOf(revision.id());
-		List<DestinationPreview> previews = this.previewService.previews(workspaceId, revision, destinations,
-				overrides);
-		List<String> blockers = previews.stream().flatMap((p) -> p.blockers().stream()).distinct().toList();
+		List<DestinationPreview> previews = previewsFor(workspaceId, revision);
+		List<String> blockers = blockersOf(previews);
 		if (!blockers.isEmpty()) {
 			throw new PublicationException("Publishing is blocked: " + String.join(" ", blockers));
 		}
-		List<Payload> payloads = previews.stream().map((p) -> {
-			String effective = p.effectiveText() == null ? "" : p.effectiveText();
-			String rendered = this.mentions.render(workspaceId, effective, p.destination().platform());
-			return new Payload(p.destination(), rendered, sha256Hex(rendered));
-		}).toList();
-		String payloadHash = sha256Hex(payloads.stream().map(Payload::hash).collect(Collectors.joining("|")));
+		List<Payload> payloads = payloadsFor(workspaceId, previews);
+		String payloadHash = hashOf(payloads);
 		Optional<Publication> existing = this.publications.findByWorkspaceIdAndSubmissionKey(workspaceId,
 				submissionKey);
 		if (existing.isPresent()) {
@@ -192,6 +202,46 @@ public class PublicationService {
 					payload.text(), payload.hash(), usable ? D_PENDING : D_SKIPPED, null, now, now));
 		}
 		return publication;
+	}
+
+	/**
+	 * Preview blockers of one revision, fail-closed per workspace (ADR-013). UC-10 step
+	 * 3: approval checks the frozen revision before a schedule is persisted.
+	 */
+	public List<String> blockersOf(Long workspaceId, Long revisionId) {
+		PostRevision revision = this.posts.requireRevisionById(workspaceId, revisionId);
+		return blockersOf(previewsFor(workspaceId, revision));
+	}
+
+	/**
+	 * SHA-256 over the mention-rendered payloads of one revision — the semantic payload
+	 * hash bound to a UC-10 schedule at approval and recomputed at dispatch (UC-10 step
+	 * 5: a changed hash marks the schedule NEEDS_REVIEW instead of dispatching).
+	 */
+	public String payloadHashFor(Long workspaceId, Long revisionId) {
+		PostRevision revision = this.posts.requireRevisionById(workspaceId, revisionId);
+		return hashOf(payloadsFor(workspaceId, previewsFor(workspaceId, revision)));
+	}
+
+	private List<DestinationPreview> previewsFor(Long workspaceId, PostRevision revision) {
+		return this.previewService.previews(workspaceId, revision, this.posts.destinationsOf(revision.id()),
+				this.posts.overridesOf(revision.id()));
+	}
+
+	private List<String> blockersOf(List<DestinationPreview> previews) {
+		return previews.stream().flatMap((p) -> p.blockers().stream()).distinct().toList();
+	}
+
+	private List<Payload> payloadsFor(Long workspaceId, List<DestinationPreview> previews) {
+		return previews.stream().map((p) -> {
+			String effective = p.effectiveText() == null ? "" : p.effectiveText();
+			String rendered = this.mentions.render(workspaceId, effective, p.destination().platform());
+			return new Payload(p.destination(), rendered, sha256Hex(rendered));
+		}).toList();
+	}
+
+	private String hashOf(List<Payload> payloads) {
+		return sha256Hex(payloads.stream().map(Payload::hash).collect(Collectors.joining("|")));
 	}
 
 	/**
