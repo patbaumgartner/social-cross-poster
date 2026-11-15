@@ -33,6 +33,7 @@ import com.patbaumgartner.socialcrossposter.content.RevisionOverrideRepository;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttempt;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryMediaRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
 import com.patbaumgartner.socialcrossposter.publish.RemoteActionAttemptRepository;
 import com.patbaumgartner.socialcrossposter.publish.RemoteActionRepository;
@@ -127,6 +128,9 @@ class HistoryFlowTest {
 	@Autowired
 	MediaAssetRepository mediaAssets;
 
+	@Autowired
+	DeliveryMediaRepository deliveryMedia;
+
 	@BeforeEach
 	@AfterEach
 	void resetState() {
@@ -140,6 +144,8 @@ class HistoryFlowTest {
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();
 		this.attempts.deleteAll();
+		// delivery_media references delivery — delete before deliveries.
+		this.deliveryMedia.deleteAll();
 		this.deliveries.deleteAll();
 		this.publications.deleteAll();
 		this.overrides.deleteAll();
