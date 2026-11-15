@@ -1,5 +1,6 @@
 package com.patbaumgartner.socialcrossposter.web;
 
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.patbaumgartner.socialcrossposter.TestImages;
 import com.patbaumgartner.socialcrossposter.accounts.AccountDestination;
 import com.patbaumgartner.socialcrossposter.accounts.AccountRepository;
 import com.patbaumgartner.socialcrossposter.accounts.Connection;
@@ -33,6 +35,7 @@ import com.patbaumgartner.socialcrossposter.content.RevisionDestinationRepositor
 import com.patbaumgartner.socialcrossposter.content.RevisionOverrideRepository;
 import com.patbaumgartner.socialcrossposter.media.MediaAsset;
 import com.patbaumgartner.socialcrossposter.media.MediaAssetRepository;
+import com.patbaumgartner.socialcrossposter.media.OutgoingImageSanitizer;
 import com.patbaumgartner.socialcrossposter.media.RevisionMedia;
 import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
 import com.patbaumgartner.socialcrossposter.notify.NotificationEventRepository;
@@ -83,7 +86,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class MediaFlowTest {
 
-	private static final byte[] PNG = { (byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10, 1, 2, 3, 4 };
+	/**
+	 * A real PNG carrying fake GPS metadata — the outgoing derivative must be stripped
+	 * (ADR-016).
+	 */
+	private static final byte[] PNG = TestImages.pngWithGpsText();
 
 	@Autowired
 	MockMvc mockMvc;
@@ -233,11 +240,13 @@ class MediaFlowTest {
 			.andExpect(status().is3xxRedirection());
 		assertThat(this.mediaAssets.findAllByWorkspaceIdOrderByIdDesc(workspaceId)).hasSize(1);
 
-		// authenticated download returns the exact bytes (ADR-008: no public URL)
+		// authenticated download returns the exact original bytes incl. metadata
+		// (ADR-008: no public URL)
 		this.mockMvc.perform(get("/w/private/media/" + asset.id() + "/file").session(session))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Content-Type", containsString("image/png")))
 			.andExpect(content().bytes(PNG));
+		assertThat(new String(PNG, StandardCharsets.ISO_8859_1)).contains("GPS: 48.1867N");
 
 		// attach without alt text is rejected (ADR-016)
 		this.mockMvc
@@ -266,7 +275,7 @@ class MediaFlowTest {
 		assertThat(this.publicationService.blockersOf(workspaceId, revisionId)).isEmpty();
 
 		// publishing a revision with attached media succeeds and uploads the private
-		// bytes
+		// bytes — but only the metadata-stripped outgoing derivative (ADR-016)
 		this.mockMvc
 			.perform(post("/w/private/posts/" + postId + "/publish").with(csrf())
 				.session(session)
@@ -280,7 +289,11 @@ class MediaFlowTest {
 		assertThat(context.media()).hasSize(1);
 		assertThat(context.media().get(0).filename()).isEqualTo("chart.png");
 		assertThat(context.media().get(0).contentType()).isEqualTo("image/png");
-		assertThat(context.media().get(0).bytes()).isEqualTo(PNG);
+		byte[] outgoing = OutgoingImageSanitizer.strip("image/png", PNG);
+		assertThat(context.media().get(0).bytes()).isEqualTo(outgoing);
+		assertThat(new String(context.media().get(0).bytes(), StandardCharsets.ISO_8859_1))
+			.doesNotContain("GPS: 48.1867N")
+			.doesNotContain("tEXt"); // GPS/camera metadata never leaves the workspace
 		assertThat(context.media().get(0).altText()).isEqualTo("Sales chart Q3");
 		// the approved image is snapshotted on the delivery (V11 delivery_media)
 		Long deliveryId = this.deliveries

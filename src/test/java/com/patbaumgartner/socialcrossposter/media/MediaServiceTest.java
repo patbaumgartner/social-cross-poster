@@ -1,15 +1,18 @@
 package com.patbaumgartner.socialcrossposter.media;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.patbaumgartner.socialcrossposter.TestImages;
 import com.patbaumgartner.socialcrossposter.content.Post;
 import com.patbaumgartner.socialcrossposter.content.PostRevision;
 import com.patbaumgartner.socialcrossposter.content.PostService;
@@ -17,6 +20,7 @@ import com.patbaumgartner.socialcrossposter.content.PostService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -41,7 +45,11 @@ class MediaServiceTest {
 
 	private static final OffsetDateTime NOW = OffsetDateTime.now();
 
-	private static final byte[] PNG = { (byte) 0x89, 'P', 'N', 'G', 1, 2, 3 };
+	/**
+	 * A real PNG carrying fake GPS/camera metadata in a tEXt chunk (stripped on
+	 * outgoing).
+	 */
+	private static final byte[] PNG = TestImages.pngWithGpsText();
 
 	@TempDir
 	Path tempDir;
@@ -89,6 +97,37 @@ class MediaServiceTest {
 
 		assertThat(second).isSameAs(existing);
 		verify(this.assets).save(any(MediaAsset.class)); // only the first upload saved
+	}
+
+	@Test
+	void uploadAlsoStoresMetadataStrippedDerivativeAndRejectsUnparsableImages() throws Exception {
+		MediaAsset asset = this.service.upload(WS, "gps.png", "image/png", PNG);
+		given(this.assets.findByWorkspaceIdAndSha256(WS, asset.sha256())).willReturn(Optional.of(asset));
+		Path dir = this.tempDir.resolve(WS.toString());
+
+		// private original keeps the metadata (ADR-008/ADR-016), derivative is stripped
+		assertThat(Files.readAllBytes(dir.resolve(asset.sha256()))).isEqualTo(PNG);
+		assertThat(new String(PNG, StandardCharsets.ISO_8859_1)).contains("GPS: 48.1867N");
+		byte[] outgoing = this.service.outgoingBytes(WS, asset.sha256());
+		assertThat(new String(outgoing, StandardCharsets.ISO_8859_1)).doesNotContain("GPS: 48.1867N")
+			.doesNotContain("tEXt");
+		assertThat(Files.readAllBytes(dir.resolve("out-" + asset.sha256()))).isEqualTo(outgoing);
+
+		// outgoingBytes is hash-validated and workspace-scoped (fail-closed, ADR-013)
+		assertThatThrownBy(() -> this.service.outgoingBytes(WS, "not-a-hash")).isInstanceOf(MediaException.class)
+			.hasMessageContaining("hash");
+		assertThatThrownBy(() -> this.service.outgoingBytes(999L, asset.sha256())).isInstanceOf(MediaException.class)
+			.hasMessageContaining("Unknown media asset");
+
+		// an unparsable "png" is rejected fail-closed at upload — nothing stored, no row
+		byte[] fake = { (byte) 0x89, 'P', 'N', 'G', 1, 2, 3 };
+		assertThatThrownBy(() -> this.service.upload(WS, "fake.png", "image/png", fake))
+			.isInstanceOf(MediaException.class)
+			.hasMessageContaining("sanitized");
+		try (Stream<Path> files = Files.list(dir)) {
+			assertThat(files).hasSize(2); // only original + derivative of the good upload
+		}
+		verify(this.assets, never()).save(argThat(a -> a != null && "fake.png".equals(a.filename())));
 	}
 
 	@Test
@@ -162,7 +201,9 @@ class MediaServiceTest {
 		given(this.revisionMedia.countByWorkspaceIdAndMediaId(WS, MEDIA_ID)).willReturn(0L);
 		this.service.deleteAsset(WS, MEDIA_ID);
 		verify(this.assets).delete(asset);
+		// both the private original and the outgoing derivative are removed
 		assertThat(Files.exists(this.tempDir.resolve(WS.toString()).resolve(asset.sha256()))).isFalse();
+		assertThat(Files.exists(this.tempDir.resolve(WS.toString()).resolve("out-" + asset.sha256()))).isFalse();
 	}
 
 	@Test
