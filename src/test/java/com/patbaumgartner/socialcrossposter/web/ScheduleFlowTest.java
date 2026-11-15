@@ -47,6 +47,7 @@ import com.patbaumgartner.socialcrossposter.platform.PublishResult;
 import com.patbaumgartner.socialcrossposter.platform.TelegramPublisher;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryMediaRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryRepository;
 import com.patbaumgartner.socialcrossposter.publish.Publication;
@@ -153,6 +154,9 @@ class ScheduleFlowTest {
 	MediaAssetRepository mediaAssets;
 
 	@Autowired
+	DeliveryMediaRepository deliveryMedia;
+
+	@Autowired
 	PublicationScheduleRepository scheduleRepo;
 
 	@Autowired
@@ -177,6 +181,8 @@ class ScheduleFlowTest {
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();
 		this.attempts.deleteAll();
+		// delivery_media references delivery — delete before deliveries.
+		this.deliveryMedia.deleteAll();
 		this.deliveries.deleteAll();
 		this.scheduleRepo.deleteAll();
 		this.publications.deleteAll();

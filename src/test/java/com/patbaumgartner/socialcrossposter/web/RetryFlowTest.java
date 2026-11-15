@@ -36,6 +36,7 @@ import com.patbaumgartner.socialcrossposter.platform.TelegramPublisher;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttempt;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryMediaRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJob;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
 import com.patbaumgartner.socialcrossposter.publish.RemoteActionAttemptRepository;
@@ -139,6 +140,9 @@ class RetryFlowTest {
 	MediaAssetRepository mediaAssets;
 
 	@Autowired
+	DeliveryMediaRepository deliveryMedia;
+
+	@Autowired
 	DeliveryJobService jobService;
 
 	@MockitoBean
@@ -157,6 +161,8 @@ class RetryFlowTest {
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();
 		this.attempts.deleteAll();
+		// delivery_media references delivery — delete before deliveries.
+		this.deliveryMedia.deleteAll();
 		this.deliveries.deleteAll();
 		this.publications.deleteAll();
 		this.overrides.deleteAll();

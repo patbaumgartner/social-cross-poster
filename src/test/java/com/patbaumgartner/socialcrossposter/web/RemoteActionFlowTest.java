@@ -38,6 +38,7 @@ import com.patbaumgartner.socialcrossposter.platform.TelegramPublisher;
 import com.patbaumgartner.socialcrossposter.platform.TelegramRemoteActor;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryMediaRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryRepository;
 import com.patbaumgartner.socialcrossposter.publish.Publication;
@@ -142,6 +143,9 @@ class RemoteActionFlowTest {
 	@Autowired
 	MediaAssetRepository mediaAssets;
 
+	@Autowired
+	DeliveryMediaRepository deliveryMedia;
+
 	@MockitoBean
 	TelegramPublisher telegramPublisher;
 
@@ -161,6 +165,8 @@ class RemoteActionFlowTest {
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();
 		this.attempts.deleteAll();
+		// delivery_media references delivery — delete before deliveries.
+		this.deliveryMedia.deleteAll();
 		this.deliveries.deleteAll();
 		this.publications.deleteAll();
 		this.overrides.deleteAll();

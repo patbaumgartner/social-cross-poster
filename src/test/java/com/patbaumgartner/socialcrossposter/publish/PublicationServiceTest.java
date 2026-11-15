@@ -14,6 +14,9 @@ import com.patbaumgartner.socialcrossposter.accounts.Connection;
 import com.patbaumgartner.socialcrossposter.accounts.ConnectionRepository;
 import com.patbaumgartner.socialcrossposter.accounts.SecretCipher;
 import com.patbaumgartner.socialcrossposter.contacts.MentionResolver;
+import com.patbaumgartner.socialcrossposter.media.MediaAsset;
+import com.patbaumgartner.socialcrossposter.media.MediaService;
+import com.patbaumgartner.socialcrossposter.media.RevisionMedia;
 import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
 import com.patbaumgartner.socialcrossposter.content.DestinationPreview;
 import com.patbaumgartner.socialcrossposter.content.Post;
@@ -22,6 +25,7 @@ import com.patbaumgartner.socialcrossposter.content.PostRevision;
 import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
+import com.patbaumgartner.socialcrossposter.platform.MediaAttachment;
 import com.patbaumgartner.socialcrossposter.platform.PlatformPublisher;
 import com.patbaumgartner.socialcrossposter.platform.PlatformReconciler;
 import com.patbaumgartner.socialcrossposter.platform.PublishContext;
@@ -99,6 +103,10 @@ class PublicationServiceTest {
 
 	private RevisionMediaRepository revisionMedia;
 
+	private DeliveryMediaRepository deliveryMedia;
+
+	private MediaService media;
+
 	private PlatformPublisher publisher;
 
 	private ReconcilerRegistry reconcilers;
@@ -129,11 +137,13 @@ class PublicationServiceTest {
 		this.deliveries = mock(DeliveryRepository.class);
 		this.attempts = mock(DeliveryAttemptRepository.class);
 		this.revisionMedia = mock(RevisionMediaRepository.class);
+		this.deliveryMedia = mock(DeliveryMediaRepository.class);
+		this.media = mock(MediaService.class);
 		this.publisher = mock(PlatformPublisher.class);
 		this.reconciler = mock(PlatformReconciler.class);
 		this.service = new PublicationService(this.posts, this.previewService, this.mentions, this.accounts,
 				this.connections, this.secrets, this.publishers, this.reconcilers, this.publications, this.deliveries,
-				this.attempts, this.revisionMedia);
+				this.attempts, this.revisionMedia, this.deliveryMedia, this.media);
 
 		this.post = new Post(POST_ID, WS, "Title", PostService.STATE_DRAFT, REVISION_ID, 1L, NOW, NOW);
 		this.revision = new PostRevision(REVISION_ID, WS, POST_ID, 1, "hello", NOW);
@@ -465,6 +475,102 @@ class PublicationServiceTest {
 		assertThat(PublicationService.deriveAggregate(List.of(delivery("FAILED"), delivery("FAILED"))))
 			.isEqualTo(PublicationService.P_FAILED);
 		assertThat(PublicationService.deriveAggregate(List.of())).isEqualTo(PublicationService.P_FAILED);
+	}
+
+	@Test
+	void mediaAttachedWithUploadCapablePlatformSnapshotsDeliveryMedia() {
+		attachOneImage("a".repeat(64));
+		given(this.publisher.supportsMediaUpload()).willReturn(true);
+
+		Publication publication = this.service.create(WS, "private", POST_ID, "key-media");
+
+		assertThat(publication.state()).isEqualTo(PublicationService.P_IN_PROGRESS);
+		verify(this.deliveryMedia).save(argThat((DeliveryMedia m) -> m.deliveryId().equals(DELIVERY)
+				&& m.position() == 1 && m.sha256().equals("a".repeat(64)) && m.altText().equals("Chart")));
+		// no media blocker for an upload-capable platform
+		given(this.posts.requireRevisionById(WS, REVISION_ID)).willReturn(this.revision);
+		assertThat(this.service.blockersOf(WS, REVISION_ID)).isEmpty();
+	}
+
+	@Test
+	void mediaAttachedWithUploadIncablePlatformIsBlockedFailClosed() {
+		attachOneImage("b".repeat(64));
+		given(this.publisher.supportsMediaUpload()).willReturn(false);
+		given(this.posts.requireRevisionById(WS, REVISION_ID)).willReturn(this.revision);
+
+		assertThat(this.service.blockersOf(WS, REVISION_ID))
+			.contains(PublicationService.BLOCKER_MEDIA_PLATFORM.formatted("telegram"));
+		assertThatThrownBy(() -> this.service.create(WS, "private", POST_ID, "key-media"))
+			.isInstanceOf(PublicationException.class)
+			.hasMessageContaining("blocked")
+			.hasMessageContaining("telegram");
+		verify(this.publications, never()).save(any(Publication.class));
+		verify(this.deliveries, never()).save(any(Delivery.class));
+	}
+
+	@Test
+	void payloadHashCoversAttachedImageContent() {
+		given(this.posts.requireRevisionById(WS, REVISION_ID)).willReturn(this.revision);
+		attachOneImage("c".repeat(64));
+		String hash1 = this.service.payloadHashFor(WS, REVISION_ID);
+
+		attachOneImage("d".repeat(64));
+		String hash2 = this.service.payloadHashFor(WS, REVISION_ID);
+
+		assertThat(hash1).hasSize(64);
+		assertThat(hash1).isNotEqualTo(hash2); // changed image -> changed hash (UC-10
+												// NEEDS_REVIEW)
+	}
+
+	@Test
+	void executeDeliveryPassesApprovedMediaBytesToThePublisher() {
+		byte[] png = { 1, 2, 3 };
+		String sha = "e".repeat(64);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(DELIVERY))
+			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
+		given(this.media.findBySha(WS, sha))
+			.willReturn(Optional.of(new MediaAsset(60L, WS, "chart.png", "image/png", 3L, sha, NOW)));
+		given(this.media.fileBytes(WS, 60L)).willReturn(png);
+		given(this.publisher.publish(any(PublishContext.class)))
+			.willReturn(PublishResult.success("telegram:message:42"));
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_SUCCESS);
+		ArgumentCaptor<PublishContext> captor = ArgumentCaptor.forClass(PublishContext.class);
+		verify(this.publisher).publish(captor.capture());
+		List<MediaAttachment> media = captor.getValue().media();
+		assertThat(media).hasSize(1);
+		assertThat(media.get(0).filename()).isEqualTo("chart.png");
+		assertThat(media.get(0).contentType()).isEqualTo("image/png");
+		assertThat(media.get(0).bytes()).isEqualTo(png);
+		assertThat(media.get(0).altText()).isEqualTo("Chart");
+	}
+
+	@Test
+	void executeDeliveryWithMissingMediaSourceFailsClosedWithoutRemoteWrite() {
+		String sha = "f".repeat(64);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(DELIVERY))
+			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
+		given(this.media.findBySha(WS, sha)).willReturn(Optional.empty());
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_NEEDS_REVIEW);
+		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "authorize".equals(a.stage())
+				&& "FAILED".equals(a.outcome()) && a.detail().contains("no longer available")));
+		verifyNoInteractions(this.publisher);
+	}
+
+	private void attachOneImage(String sha) {
+		given(this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(REVISION_ID))
+			.willReturn(List.of(new RevisionMedia(50L, WS, REVISION_ID, 60L, 1, "Chart", NOW)));
+		given(this.media.requireAsset(WS, 60L))
+			.willReturn(new MediaAsset(60L, WS, "chart.png", "image/png", 3L, sha, NOW));
 	}
 
 	private Delivery pendingDelivery() {

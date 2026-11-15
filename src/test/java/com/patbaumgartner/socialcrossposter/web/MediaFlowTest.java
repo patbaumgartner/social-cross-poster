@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ import com.patbaumgartner.socialcrossposter.platform.PublishContext;
 import com.patbaumgartner.socialcrossposter.platform.PublishResult;
 import com.patbaumgartner.socialcrossposter.platform.TelegramPublisher;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryAttemptRepository;
+import com.patbaumgartner.socialcrossposter.publish.DeliveryMediaRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJobRepository;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryRepository;
 import com.patbaumgartner.socialcrossposter.publish.PublicationRepository;
@@ -52,6 +54,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
@@ -145,6 +149,9 @@ class MediaFlowTest {
 	MediaAssetRepository mediaAssets;
 
 	@Autowired
+	DeliveryMediaRepository deliveryMedia;
+
+	@Autowired
 	PublicationService publicationService;
 
 	@MockitoBean
@@ -160,6 +167,8 @@ class MediaFlowTest {
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();
 		this.attempts.deleteAll();
+		// delivery_media references delivery — delete before deliveries.
+		this.deliveryMedia.deleteAll();
 		this.deliveries.deleteAll();
 		this.scheduleRepo.deleteAll();
 		this.publications.deleteAll();
@@ -177,6 +186,7 @@ class MediaFlowTest {
 	@BeforeEach
 	void stubPublisher() {
 		given(this.telegramPublisher.platform()).willReturn("telegram");
+		given(this.telegramPublisher.supportsMediaUpload()).willReturn(true);
 		given(this.telegramPublisher.publish(any(PublishContext.class)))
 			.willReturn(PublishResult.success("telegram:message:99"));
 	}
@@ -252,24 +262,11 @@ class MediaFlowTest {
 		assertThat(links.get(0).position()).isEqualTo(1);
 		assertThat(links.get(0).altText()).isEqualTo("Sales chart Q3");
 
-		// publishing a revision with media is blocked fail-closed (UC-13 later slice)
-		assertThat(this.publicationService.blockersOf(workspaceId, revisionId))
-			.contains(PublicationService.BLOCKER_MEDIA_NOT_PUBLISHED);
-		this.mockMvc
-			.perform(post("/w/private/posts/" + postId + "/publish").with(csrf())
-				.session(session)
-				.param("submissionKey", "key-media"))
-			.andExpect(status().is3xxRedirection())
-			.andExpect(flash().attribute("error", containsString("blocked")));
-		assertThat(publicationsOf(workspaceId)).isEmpty();
+		// telegram supports media upload — no media blocker (UC-13 second slice)
+		assertThat(this.publicationService.blockersOf(workspaceId, revisionId)).isEmpty();
 
-		// detach, then publish succeeds (text-only revision)
-		this.mockMvc
-			.perform(post("/w/private/posts/" + postId + "/media/" + links.get(0).id() + "/detach").with(csrf())
-				.session(session))
-			.andExpect(status().is3xxRedirection())
-			.andExpect(flash().attribute("notice", containsString("detached")));
-		assertThat(this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revisionId)).isEmpty();
+		// publishing a revision with attached media succeeds and uploads the private
+		// bytes
 		this.mockMvc
 			.perform(post("/w/private/posts/" + postId + "/publish").with(csrf())
 				.session(session)
@@ -277,6 +274,33 @@ class MediaFlowTest {
 			.andExpect(status().is3xxRedirection())
 			.andExpect(flash().attribute("notice", containsString("PUBLISHED")));
 		assertThat(publicationsOf(workspaceId)).hasSize(1);
+		ArgumentCaptor<PublishContext> captor = ArgumentCaptor.forClass(PublishContext.class);
+		verify(this.telegramPublisher, atLeastOnce()).publish(captor.capture());
+		PublishContext context = captor.getValue();
+		assertThat(context.media()).hasSize(1);
+		assertThat(context.media().get(0).filename()).isEqualTo("chart.png");
+		assertThat(context.media().get(0).contentType()).isEqualTo("image/png");
+		assertThat(context.media().get(0).bytes()).isEqualTo(PNG);
+		assertThat(context.media().get(0).altText()).isEqualTo("Sales chart Q3");
+		// the approved image is snapshotted on the delivery (V11 delivery_media)
+		Long deliveryId = this.deliveries
+			.findAllByWorkspaceIdAndPublicationIdOrderByIdAsc(workspaceId, publicationsOf(workspaceId).get(0).id())
+			.get(0)
+			.id();
+		List<com.patbaumgartner.socialcrossposter.publish.DeliveryMedia> snapshot = this.deliveryMedia
+			.findAllByDeliveryIdOrderByPositionAsc(deliveryId);
+		assertThat(snapshot).hasSize(1);
+		assertThat(snapshot.get(0).sha256()).isEqualTo(asset.sha256());
+		assertThat(snapshot.get(0).position()).isEqualTo(1);
+		assertThat(snapshot.get(0).altText()).isEqualTo("Sales chart Q3");
+
+		// detach removes the link from the current revision
+		this.mockMvc
+			.perform(post("/w/private/posts/" + postId + "/media/" + links.get(0).id() + "/detach").with(csrf())
+				.session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(flash().attribute("notice", containsString("detached")));
+		assertThat(this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revisionId)).isEmpty();
 
 		// delete removes the row (file cleanup is covered by MediaServiceTest)
 		this.mockMvc

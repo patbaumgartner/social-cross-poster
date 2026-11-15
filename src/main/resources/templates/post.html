@@ -59,8 +59,10 @@
       <h2>Media (UC-13)</h2>
       <p>Images are stored in the <strong>private</strong> workspace library and served only to
         authenticated sessions — never as public URLs (ADR-008). Every attached image needs a
-        meaningful alt text (ADR-016). Platform upload is not implemented yet: publishing a revision
-        with attached images is blocked fail-closed until the later UC-13 slice.</p>
+        meaningful alt text (ADR-016); Telegram cannot transmit alt text on photos, so the alt text
+        stays local and that limitation is accepted (ADR-016). Telegram uploads attached images
+        directly (<code>sendPhoto</code> / <code>sendMediaGroup</code> album of up to 10, the text as
+        caption up to 1024 chars) — platforms without upload support stay blocked fail-closed.</p>
       <form method="post" enctype="multipart/form-data"
             th:action="@{/w/{slug}/posts/{id}/media/upload(slug=${workspace.slug},id=${post.id})}">
         <div class="field">
