@@ -16,6 +16,8 @@ public interface DeliveryJobRepository extends CrudRepository<DeliveryJob, Long>
 
 	Optional<DeliveryJob> findByDeliveryIdAndWorkspaceId(Long deliveryId, Long workspaceId);
 
+	List<DeliveryJob> findAllByWorkspaceId(Long workspaceId);
+
 	/**
 	 * Ids of jobs due now (UC-07, ADR-015): PENDING with {@code next_run_at} reached, or
 	 * RUNNING with an expired lease (crashed worker).
