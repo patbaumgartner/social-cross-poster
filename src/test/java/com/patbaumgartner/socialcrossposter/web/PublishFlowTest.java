@@ -16,6 +16,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import com.patbaumgartner.socialcrossposter.notify.NotificationEventRepository;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.patbaumgartner.socialcrossposter.accounts.AccountDestination;
@@ -130,12 +131,17 @@ class PublishFlowTest {
 	@Autowired
 	RemoteActionAttemptRepository remoteActionAttempts;
 
+	@Autowired
+	NotificationEventRepository notificationEvents;
+
 	@MockitoBean
 	TelegramPublisher telegramPublisher;
 
 	@BeforeEach
 	@AfterEach
 	void resetState() {
+		// notification_event references publication/delivery/schedule, so it goes first.
+		this.notificationEvents.deleteAll();
 		this.remoteActionAttempts.deleteAll();
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();

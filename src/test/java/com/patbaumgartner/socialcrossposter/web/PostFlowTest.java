@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+import com.patbaumgartner.socialcrossposter.notify.NotificationEventRepository;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.patbaumgartner.socialcrossposter.accounts.AccountDestination;
@@ -110,12 +111,17 @@ class PostFlowTest {
 	@Autowired
 	RemoteActionAttemptRepository remoteActionAttempts;
 
+	@Autowired
+	NotificationEventRepository notificationEvents;
+
 	@BeforeEach
 	@AfterEach
 	void resetState() {
 		// The H2 in-memory database is shared across tests in this context; clean in
 		// FK-safe order before and after each test so other test classes (accounts,
 		// contacts) are never affected by leftover post rows.
+		// notification_event references publication/delivery/schedule, so it goes first.
+		this.notificationEvents.deleteAll();
 		this.remoteActionAttempts.deleteAll();
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();
