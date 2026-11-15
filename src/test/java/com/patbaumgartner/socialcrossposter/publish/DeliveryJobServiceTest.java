@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.patbaumgartner.socialcrossposter.notify.NotificationService;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
 
@@ -47,6 +48,8 @@ class DeliveryJobServiceTest {
 
 	private WorkspaceRepository workspaces;
 
+	private NotificationService notifications;
+
 	private DeliveryJobService service;
 
 	@BeforeEach
@@ -54,8 +57,9 @@ class DeliveryJobServiceTest {
 		this.publications = mock(PublicationService.class);
 		this.jobs = mock(DeliveryJobRepository.class);
 		this.workspaces = mock(WorkspaceRepository.class);
+		this.notifications = mock(NotificationService.class);
 		WorkerProperties props = new WorkerProperties(true, 5000L, 2000L, 60L, 3, 60L, 3600L, "test-worker");
-		this.service = new DeliveryJobService(this.publications, this.jobs, this.workspaces, props);
+		this.service = new DeliveryJobService(this.publications, this.jobs, this.workspaces, props, this.notifications);
 		given(this.workspaces.findById(WS))
 			.willReturn(Optional.of(new Workspace(WS, "private", "Private", "#ffffff", "UTC", NOW)));
 		given(this.jobs.save(any(DeliveryJob.class))).willAnswer((inv) -> inv.getArgument(0));
@@ -65,7 +69,7 @@ class DeliveryJobServiceTest {
 	void instanceIdUsesConfiguredNameOrRandomWorkerPrefix() {
 		assertThat(this.service.instanceId()).isEqualTo("test-worker");
 		DeliveryJobService random = new DeliveryJobService(this.publications, this.jobs, this.workspaces,
-				new WorkerProperties(null, null, null, null, null, null, null, null));
+				new WorkerProperties(null, null, null, null, null, null, null, null), this.notifications);
 		assertThat(random.instanceId()).startsWith("worker-");
 	}
 
@@ -77,7 +81,7 @@ class DeliveryJobServiceTest {
 		assertThat(this.service.backoffSeconds(100)).isBetween(2880L, 3600L); // capped at
 																				// 3600
 		DeliveryJobService tiny = new DeliveryJobService(this.publications, this.jobs, this.workspaces,
-				new WorkerProperties(null, null, null, null, null, 1L, 1L, null));
+				new WorkerProperties(null, null, null, null, null, 1L, 1L, null), this.notifications);
 		assertThat(tiny.backoffSeconds(5)).isEqualTo(1L); // floor
 	}
 
@@ -150,6 +154,7 @@ class DeliveryJobServiceTest {
 		verify(this.jobs).save(argThat((DeliveryJob j) -> DeliveryJobService.J_SUCCEEDED.equals(j.state())
 				&& j.leaseOwner() == null && j.leaseUntil() == null));
 		verify(this.publications).refreshAggregate(WS, PUB);
+		verifyNoInteractions(this.notifications);
 		assertThat(result.state()).isEqualTo(PublicationService.D_SUCCESS);
 	}
 
@@ -167,6 +172,8 @@ class DeliveryJobServiceTest {
 		verify(this.jobs).save(captor.capture());
 		assertThat(captor.getValue().state()).isEqualTo(DeliveryJobService.J_PENDING);
 		assertThat(captor.getValue().nextRunAt()).isBetween(NOW.plusSeconds(48), NOW.plusSeconds(72));
+		// UC-12: a failed delivery with budget left records a DELIVERY_FAILED event
+		verify(this.notifications).notifyDeliveryFailed(WS, delivery(PublicationService.D_FAILED));
 	}
 
 	@Test
@@ -181,6 +188,9 @@ class DeliveryJobServiceTest {
 		verify(this.publications, never()).updateDeliveryState(any(), any(), any(), any());
 		verify(this.jobs).save(argThat((DeliveryJob j) -> DeliveryJobService.J_EXHAUSTED.equals(j.state())));
 		verify(this.publications).refreshAggregate(WS, PUB);
+		// UC-12: exhausted retries record a RETRIES_EXHAUSTED event
+		verify(this.notifications).notifyRetriesExhausted(WS, delivery(PublicationService.D_FAILED), 3L);
+		verify(this.notifications, never()).notifyDeliveryFailed(any(), any());
 	}
 
 	@Test
@@ -197,6 +207,25 @@ class DeliveryJobServiceTest {
 		verify(this.publications).reconcileDelivery(WS, "private", DELIVERY);
 		verify(this.publications, never()).executeRetry(any(), any(), any());
 		verify(this.jobs).save(argThat((DeliveryJob j) -> DeliveryJobService.J_CANCELED.equals(j.state())));
+		// UC-12: the reconciled NEEDS_ATTENTION outcome records a needs-attention event,
+		// not an UNKNOWN one
+		verify(this.notifications).notifyDeliveryNeedsAttention(WS, delivery(PublicationService.D_NEEDS_ATTENTION));
+		verify(this.notifications, never()).notifyDeliveryUnknown(any(), any());
+	}
+
+	@Test
+	void settleUnknownStayingUnknownRecordsUnknownEvent() {
+		given(this.publications.requireDelivery(WS, DELIVERY)).willReturn(delivery(PublicationService.D_UNKNOWN));
+		given(this.publications.reconcileDelivery(WS, "private", DELIVERY))
+			.willReturn(delivery(PublicationService.D_UNKNOWN));
+		given(this.jobs.findByDeliveryIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.empty());
+
+		this.service.settle(WS, "private", delivery(PublicationService.D_UNKNOWN), NOW);
+
+		// still UNKNOWN after reconciliation: default branch re-queues the job and UC-12
+		// records a DELIVERY_UNKNOWN event
+		verify(this.notifications).notifyDeliveryUnknown(WS, delivery(PublicationService.D_UNKNOWN));
+		verify(this.notifications, never()).notifyDeliveryNeedsAttention(any(), any());
 	}
 
 	@Test
@@ -210,6 +239,7 @@ class DeliveryJobServiceTest {
 
 		verify(this.publications, never()).reconcileDelivery(any(), any(), any());
 		verify(this.jobs).save(argThat((DeliveryJob j) -> DeliveryJobService.J_CANCELED.equals(j.state())));
+		verify(this.notifications).notifyDeliveryNeedsAttention(WS, delivery(PublicationService.D_NEEDS_ATTENTION));
 	}
 
 	@Test

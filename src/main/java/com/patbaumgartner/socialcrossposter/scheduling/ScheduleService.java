@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.patbaumgartner.socialcrossposter.content.Post;
 import com.patbaumgartner.socialcrossposter.content.PostRevision;
 import com.patbaumgartner.socialcrossposter.content.PostService;
+import com.patbaumgartner.socialcrossposter.notify.NotificationService;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJobService;
 import com.patbaumgartner.socialcrossposter.publish.Publication;
@@ -85,13 +86,16 @@ public class ScheduleService {
 
 	private final DeliveryJobService jobs;
 
+	private final NotificationService notifications;
+
 	public ScheduleService(PublicationScheduleRepository schedules, PostService posts, WorkspaceRepository workspaces,
-			PublicationService publications, DeliveryJobService jobs) {
+			PublicationService publications, DeliveryJobService jobs, NotificationService notifications) {
 		this.schedules = schedules;
 		this.posts = posts;
 		this.workspaces = workspaces;
 		this.publications = publications;
 		this.jobs = jobs;
+		this.notifications = notifications;
 	}
 
 	/**
@@ -210,12 +214,14 @@ public class ScheduleService {
 		}
 		if (now.isAfter(current.scheduledAt().plus(DISPATCH_CUTOFF))) {
 			this.schedules.transition(current.id(), current.workspaceId(), S_PENDING, S_EXPIRED, now);
+			this.notifications.notifyScheduleExpired(current.workspaceId(), current);
 			return;
 		}
 		Workspace workspace = this.workspaces.findById(current.workspaceId()).orElseThrow();
 		String payloadHash = this.publications.payloadHashFor(current.workspaceId(), current.revisionId());
 		if (!payloadHash.equals(current.payloadHash())) {
 			this.schedules.transition(current.id(), current.workspaceId(), S_PENDING, S_NEEDS_REVIEW, now);
+			this.notifications.notifyScheduleNeedsReview(current.workspaceId(), current);
 			return;
 		}
 		Publication publication = this.publications.create(current.workspaceId(), workspace.slug(), current.postId(),
