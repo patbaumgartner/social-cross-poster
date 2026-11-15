@@ -1,6 +1,6 @@
 # ADR-004 — Workspace-scoped editorial and publishing domain
 
-- **Status:** Accepted; amended during the pre-implementation review; the `post`/`post_revision`/`revision_destination`/`revision_override` slice is implemented 2026-11-14 (UC-04 first slice, Flyway V4) and the `publication`/`delivery`/`delivery_attempt` slice is implemented 2026-11-14 (UC-05 first slice, Flyway V5 — media, schedule, AI and notification entities remain planned)
+- **Status:** Accepted; amended during the pre-implementation review; the `post`/`post_revision`/`revision_destination`/`revision_override` slice is implemented 2026-11-14 (UC-04 first slice, Flyway V4) and the `publication`/`delivery`/`delivery_attempt` slice is implemented 2026-11-14 (UC-05 first slice, Flyway V5); read-only history views over those tables are implemented 2026-11-15 (UC-06 first slice — media, schedule, AI and notification entities remain planned)
 - **Date:** 2026-11-13
 
 ## Context

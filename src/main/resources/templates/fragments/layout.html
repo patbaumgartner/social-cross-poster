@@ -19,6 +19,7 @@
     <a th:if="${workspace != null}" th:href="@{/w/{slug}/contacts(slug=${workspace.slug})}">Contacts</a>
     <a th:if="${workspace != null}" th:href="@{/w/{slug}/posts(slug=${workspace.slug})}">Posts</a>
     <a th:if="${workspace != null}" th:href="@{/w/{slug}/compose(slug=${workspace.slug})}">Compose</a>
+    <a th:if="${workspace != null}" th:href="@{/w/{slug}/history(slug=${workspace.slug})}">History</a>
     <form class="logout" method="post" th:action="@{/logout}">
       <button type="submit">Sign out</button>
     </form>

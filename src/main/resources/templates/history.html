@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · History')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — history'">History</h1>
+    <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Dashboard</a></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p class="notice" role="status" th:if="${notice}" th:text="${notice}">Notice</p>
+
+    <section class="card">
+      <h2>Filter</h2>
+      <form method="get" th:action="@{/w/{slug}/history(slug=${workspace.slug})}">
+        <div class="field">
+          <label for="account">Destination</label>
+          <select id="account" name="account">
+            <option value="">all</option>
+            <option th:each="a : ${accounts}" th:value="${a.id}" th:text="${a.platform + ' · ' + a.label}"
+                    th:selected="${a.id == account}">dest</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="platform">Platform</label>
+          <select id="platform" name="platform">
+            <option value="">all</option>
+            <option th:each="p : ${platforms}" th:value="${p}" th:text="${p}" th:selected="${p == platform}">telegram</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="state">State</label>
+          <select id="state" name="state">
+            <option value="">all</option>
+            <option th:each="s : ${states}" th:value="${s}" th:text="${s}" th:selected="${s == state}">PUBLISHED</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="q">Text</label>
+          <input id="q" name="q" type="text" th:value="${q}" placeholder="title or payload text">
+        </div>
+        <div class="field">
+          <label for="from">From date</label>
+          <input id="from" name="from" type="date" th:value="${from}">
+        </div>
+        <div class="field">
+          <label for="to">To date</label>
+          <input id="to" name="to" type="date" th:value="${to}">
+        </div>
+        <button class="primary" type="submit">Apply</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Publications <small th:text="${page.totalItems} + ' total'">0 total</small></h2>
+      <p th:if="${page.items.isEmpty()}">No publications match. Publish a post from its page to see it here (UC-05).</p>
+      <table th:if="${!page.items.isEmpty()}">
+        <thead>
+          <tr><th>When</th><th>Post</th><th>Summary</th><th>State</th><th>Destinations</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr th:each="s : ${page.items}">
+            <td><small th:text="${#temporals.format(s.publication.createdAt, 'yyyy-MM-dd HH:mm')}">time</small></td>
+            <td th:text="${s.postTitle}">title</td>
+            <td th:text="${s.contentSummary}">summary</td>
+            <td><span class="badge" th:text="${s.publication.state}">PUBLISHED</span></td>
+            <td>
+              <span th:each="d : ${s.deliveries}" class="badge"
+                    th:text="${d.platform + ' · ' + d.destinationLabel + ': ' + d.state}">dest</span>
+            </td>
+            <td class="actions">
+              <a th:href="@{/w/{slug}/history/{id}(slug=${workspace.slug},id=${s.publication.id})}">Details</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p th:if="${page.totalPages > 1}">
+        Page <span th:text="${page.page + 1}">1</span> / <span th:text="${page.totalPages}">1</span>
+        <a th:if="${page.page > 0}"
+           th:href="@{/w/{slug}/history(slug=${workspace.slug},account=${account},platform=${platform},state=${state},q=${q},from=${from},to=${to},page=${page.page - 1},size=${page.size})}">&larr; prev</a>
+        <a th:if="${page.page + 1 < page.totalPages}"
+           th:href="@{/w/{slug}/history(slug=${workspace.slug},account=${account},platform=${platform},state=${state},q=${q},from=${from},to=${to},page=${page.page + 1},size=${page.size})}">next &rarr;</a>
+      </p>
+    </section>
+  </main>
+</body>
+</html>
