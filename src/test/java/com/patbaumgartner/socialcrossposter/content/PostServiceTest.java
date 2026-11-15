@@ -23,13 +23,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit tests for {@link PostService} (UC-09, ADR-004, ADR-013, ADR-015): restoring an
- * earlier revision copies its text, destinations and overrides into the NEXT immutable
+ * Unit tests for {@link PostService} (UC-09/UC-11, ADR-004, ADR-013, ADR-015): restoring
+ * an earlier revision copies its text, destinations and overrides into the NEXT immutable
  * revision and moves the pointer (nothing is deleted or modified — the source revision
- * stays intact), foreign post/revision ids fail closed, and the optimistic
- * version-conflict guard throws on a stale expectedVersion while saving nothing (never
- * last-write-wins) and saves normally when the version matches. Mocked repositories, no
- * Spring context.
+ * stays intact), foreign post/revision ids fail closed, the optimistic version-conflict
+ * guard throws on a stale expectedVersion while saving nothing (never last-write-wins)
+ * and saves normally when the version matches, and duplicating a post creates a NEW draft
+ * post whose first revision copies text/destinations/overrides while the source stays
+ * untouched (UC-11). Mocked repositories, no Spring context.
  */
 class PostServiceTest {
 
@@ -164,6 +165,66 @@ class PostServiceTest {
 			.hasMessageContaining("Conflict")
 			.hasMessageContaining("expected version 3")
 			.hasMessageContaining("Nothing was saved");
+
+		verify(this.revisions, never()).save(any());
+		verify(this.posts, never()).save(any());
+		verify(this.destinations, never()).save(any());
+		verify(this.overrides, never()).save(any());
+	}
+
+	@Test
+	void duplicatePostCreatesNewPostWithCopiedContentAndLeavesSourceUntouched() {
+		Post source = post(2L, REV2);
+		given(this.posts.findByIdAndWorkspaceId(POST, WS)).willReturn(Optional.of(source));
+		given(this.revisions.findByIdAndWorkspaceId(REV2, WS)).willReturn(Optional.of(revision(REV2, 2, "v2 text")));
+		given(this.destinations.findAllByRevisionId(REV2))
+			.willReturn(List.of(new RevisionDestination(50L, WS, REV2, ACCOUNT)));
+		given(this.overrides.findAllByRevisionId(REV2))
+			.willReturn(List.of(new RevisionOverride(60L, WS, REV2, "platform:telegram", "tg text", NOW)));
+		given(this.accounts.findByIdAndWorkspaceId(ACCOUNT, WS))
+			.willReturn(Optional.of(mock(AccountDestination.class)));
+
+		Post copy = this.service.duplicatePost(WS, POST);
+
+		// the copy is a new post created via createPost (initial save, pointer save
+		// inside
+		// saveRevision, final save), DRAFT, at version 1 with the copied revision #1 as
+		// its
+		// current revision
+		ArgumentCaptor<Post> postCaptor = ArgumentCaptor.forClass(Post.class);
+		verify(this.posts, org.mockito.Mockito.times(3)).save(postCaptor.capture());
+		Post firstSave = postCaptor.getAllValues().get(0);
+		assertThat(firstSave.title()).isEqualTo("T (copy)");
+		assertThat(firstSave.state()).isEqualTo(PostService.STATE_DRAFT);
+		assertThat(firstSave.version()).isEqualTo(0L);
+		Post lastSave = postCaptor.getAllValues().get(2);
+		assertThat(lastSave.currentRevisionId()).isEqualTo(300L);
+		assertThat(lastSave.version()).isEqualTo(1L);
+		assertThat(copy.currentRevisionId()).isEqualTo(300L);
+		ArgumentCaptor<PostRevision> revCaptor = ArgumentCaptor.forClass(PostRevision.class);
+		verify(this.revisions).save(revCaptor.capture());
+		assertThat(revCaptor.getValue().revisionNo()).isEqualTo(1);
+		assertThat(revCaptor.getValue().defaultText()).isEqualTo("v2 text");
+		ArgumentCaptor<RevisionDestination> destCaptor = ArgumentCaptor.forClass(RevisionDestination.class);
+		verify(this.destinations).save(destCaptor.capture());
+		assertThat(destCaptor.getValue().revisionId()).isEqualTo(300L);
+		assertThat(destCaptor.getValue().accountId()).isEqualTo(ACCOUNT);
+		ArgumentCaptor<RevisionOverride> ovCaptor = ArgumentCaptor.forClass(RevisionOverride.class);
+		verify(this.overrides).save(ovCaptor.capture());
+		assertThat(ovCaptor.getValue().revisionId()).isEqualTo(300L);
+		assertThat(ovCaptor.getValue().target()).isEqualTo("platform:telegram");
+		assertThat(ovCaptor.getValue().text()).isEqualTo("tg text");
+		// the source post/revision was never rewritten — only the three saves of the NEW
+		// post
+		verify(this.posts, org.mockito.Mockito.times(3)).save(any(Post.class));
+	}
+
+	@Test
+	void duplicatePostFailsClosedOnForeignPost() {
+		given(this.posts.findByIdAndWorkspaceId(POST, WS)).willReturn(Optional.empty());
+
+		assertThatThrownBy(() -> this.service.duplicatePost(WS, POST)).isInstanceOf(PostException.class)
+			.hasMessageContaining("Unknown post for this workspace.");
 
 		verify(this.revisions, never()).save(any());
 		verify(this.posts, never()).save(any());

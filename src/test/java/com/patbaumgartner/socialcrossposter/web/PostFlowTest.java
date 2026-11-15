@@ -415,6 +415,78 @@ class PostFlowTest {
 		assertThat(this.posts.findById(postId).orElseThrow().version()).isEqualTo(1L);
 	}
 
+	@Test
+	void duplicateCreatesIndependentCopyAndLeavesSourceUntouched() throws Exception {
+		MockHttpSession session = login();
+		Long accountId = seedDestination("private", "News channel");
+		Long postId = createPost(session, "private", "Launch", "v1 text", accountId);
+		Long sourceRevId = this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId).get(0).id();
+
+		this.mockMvc.perform(post("/w/private/posts/" + postId + "/duplicate").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrlPattern("/w/private/posts/*"))
+			.andExpect(flash().attribute("notice", containsString("Duplicated as new draft")));
+
+		Long workspaceId = workspaceId("private");
+		var all = this.posts.findAllByWorkspaceIdOrderByUpdatedAtDesc(workspaceId);
+		assertThat(all).hasSize(2);
+		var copy = all.stream().filter((p) -> !p.id().equals(postId)).findFirst().orElseThrow();
+		assertThat(copy.title()).isEqualTo("Launch (copy)");
+		assertThat(copy.state()).isEqualTo("DRAFT");
+		assertThat(copy.version()).isEqualTo(1L);
+		var copyRevisions = this.revisions.findAllByPostIdOrderByRevisionNoAsc(copy.id());
+		assertThat(copyRevisions).hasSize(1);
+		assertThat(copyRevisions.get(0).revisionNo()).isEqualTo(1);
+		assertThat(copyRevisions.get(0).defaultText()).isEqualTo("v1 text");
+		assertThat(copy.currentRevisionId()).isEqualTo(copyRevisions.get(0).id());
+		assertThat(this.destinations.findAllByRevisionId(copyRevisions.get(0).id()))
+			.extracting(RevisionDestination::accountId)
+			.containsExactly(accountId);
+
+		// the source post is untouched: still one revision, version 1, same pointer
+		assertThat(this.revisions.findAllByPostIdOrderByRevisionNoAsc(postId)).hasSize(1);
+		var source = this.posts.findById(postId).orElseThrow();
+		assertThat(source.version()).isEqualTo(1L);
+		assertThat(source.currentRevisionId()).isEqualTo(sourceRevId);
+		assertThat(source.title()).isEqualTo("Launch");
+
+		// the copy opens as its own draft and the drafts list offers Duplicate
+		this.mockMvc.perform(get("/w/private/posts/" + copy.id()).session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Launch (copy)")))
+			.andExpect(content().string(containsString("v1 text")))
+			.andExpect(content().string(containsString("Duplicate as new draft")));
+		this.mockMvc.perform(get("/w/private/posts").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Launch (copy)")))
+			.andExpect(content().string(containsString(">Duplicate</button>")));
+	}
+
+	@Test
+	void duplicateRequiresLogin() throws Exception {
+		this.mockMvc.perform(post("/w/private/posts/1/duplicate").with(csrf()))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/login"));
+	}
+
+	@Test
+	void duplicateFailsClosedForForeignWorkspaceAndUnknownSlug() throws Exception {
+		MockHttpSession session = login();
+		Long accountId = seedDestination("private", "News channel");
+		Long postId = createPost(session, "private", "Private launch", "secret", accountId);
+
+		this.mockMvc.perform(post("/w/socrates-ch/posts/" + postId + "/duplicate").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/socrates-ch/posts/" + postId))
+			.andExpect(flash().attribute("error", containsString("Unknown post")));
+		this.mockMvc.perform(post("/w/no-such-workspace/posts/" + postId + "/duplicate").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/"));
+
+		// no copy was created anywhere in the private workspace
+		assertThat(this.posts.findAllByWorkspaceIdOrderByUpdatedAtDesc(workspaceId("private"))).hasSize(1);
+	}
+
 	private Long seedDestination(String slug, String label) {
 		Long workspaceId = workspaceId(slug);
 		OffsetDateTime now = OffsetDateTime.now();

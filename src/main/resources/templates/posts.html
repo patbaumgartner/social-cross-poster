@@ -21,6 +21,10 @@
           <span class="badge" th:text="${p.state}">DRAFT</span>
           <span th:if="${p.currentRevisionId != null}" th:text="'rev → ' + ${p.currentRevisionId}">rev</span>
           <small th:text="'updated ' + ${p.updatedAt}">updated</small>
+          <form method="post" style="display:inline"
+                th:action="@{/w/{slug}/posts/{id}/duplicate(slug=${workspace.slug},id=${p.id})}">
+            <button type="submit">Duplicate</button>
+          </form>
         </li>
       </ul>
     </section>

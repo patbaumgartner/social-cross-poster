@@ -41,6 +41,13 @@
         <button type="button"
                 th:attr="hx-get=@{/w/{slug}/posts/{id}/preview(slug=${workspace.slug},id=${post.id})}, hx-include='#post-form', hx-target='#previews', hx-swap='innerHTML'">Refresh preview</button>
       </form>
+      <form method="post" style="display:inline; margin-top: 0.5rem"
+            th:action="@{/w/{slug}/posts/{id}/duplicate(slug=${workspace.slug},id=${post.id})}">
+        <button type="submit">Duplicate as new draft</button>
+      </form>
+      <p><small>Duplicate (UC-11) copies the current revision's text, destinations and overrides into a
+        new post in this workspace — schedules, publications and outcomes are not copied and the source is
+        never changed.</small></p>
     </section>
 
     <section class="card">
