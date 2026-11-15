@@ -56,6 +56,58 @@
     </section>
 
     <section class="card">
+      <h2>Media (UC-13)</h2>
+      <p>Images are stored in the <strong>private</strong> workspace library and served only to
+        authenticated sessions — never as public URLs (ADR-008). Every attached image needs a
+        meaningful alt text (ADR-016). Platform upload is not implemented yet: publishing a revision
+        with attached images is blocked fail-closed until the later UC-13 slice.</p>
+      <form method="post" enctype="multipart/form-data"
+            th:action="@{/w/{slug}/posts/{id}/media/upload(slug=${workspace.slug},id=${post.id})}">
+        <div class="field">
+          <label for="media-file">Upload image (png/jpeg/webp/gif, max 10 MB)</label>
+          <input id="media-file" name="file" type="file" accept="image/*" required>
+        </div>
+        <button type="submit">Upload to library</button>
+      </form>
+      <h3>Attached to current revision #<span th:text="${revision.revisionNo}">1</span></h3>
+      <p th:if="${mediaLinks.isEmpty()}"><em>No images attached.</em></p>
+      <ul th:if="${!mediaLinks.isEmpty()}">
+        <li th:each="m : ${mediaLinks}">
+          <img th:src="@{/w/{slug}/media/{mid}/file(slug=${workspace.slug},mid=${m.mediaId})}" alt=""
+               style="max-height:80px;vertical-align:middle">
+          #<span th:text="${m.position}">1</span>
+          <span th:text="${assetsById.get(m.mediaId).filename}">file.png</span>
+          — alt: <em th:text="${m.altText}">alt text</em>
+          <form method="post" style="display:inline"
+                th:action="@{/w/{slug}/posts/{id}/media/{lid}/detach(slug=${workspace.slug},id=${post.id},lid=${m.id})}">
+            <button type="submit">Detach</button>
+          </form>
+        </li>
+      </ul>
+      <h3>Library</h3>
+      <p th:if="${assets.isEmpty()}"><em>Library is empty.</em></p>
+      <ul th:if="${!assets.isEmpty()}">
+        <li th:each="a : ${assets}">
+          <img th:src="@{/w/{slug}/media/{mid}/file(slug=${workspace.slug},mid=${a.id})}" alt=""
+               style="max-height:60px;vertical-align:middle">
+          <span th:text="${a.filename}">file.png</span>
+          (<span th:text="${a.sizeBytes}">123</span> bytes, <code th:text="${a.contentType}">image/png</code>)
+          <form method="post" style="display:inline"
+                th:action="@{/w/{slug}/posts/{id}/media/attach(slug=${workspace.slug},id=${post.id})}">
+            <input type="hidden" name="mediaId" th:value="${a.id}">
+            <input type="text" name="altText" placeholder="Alt text (required)" required maxlength="1000">
+            <button type="submit">Attach to current revision</button>
+          </form>
+          <form method="post" style="display:inline"
+                th:action="@{/w/{slug}/media/{mid}/delete(slug=${workspace.slug},mid=${a.id})}">
+            <input type="hidden" name="postId" th:value="${post.id}">
+            <button type="submit">Delete</button>
+          </form>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card">
       <h2>Publish</h2>
       <p>Publishing binds the current revision to a workspace-scoped submission key and sends one
         immutable, mention-resolved payload per selected destination (UC-05, ADR-015). Resubmitting

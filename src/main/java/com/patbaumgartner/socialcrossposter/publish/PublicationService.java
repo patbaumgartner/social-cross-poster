@@ -19,6 +19,7 @@ import com.patbaumgartner.socialcrossposter.accounts.ConnectionRepository;
 import com.patbaumgartner.socialcrossposter.accounts.SecretCipher;
 import com.patbaumgartner.socialcrossposter.contacts.MentionResolver;
 import com.patbaumgartner.socialcrossposter.content.DestinationPreview;
+import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
 import com.patbaumgartner.socialcrossposter.content.Post;
 import com.patbaumgartner.socialcrossposter.content.PostRevision;
 import com.patbaumgartner.socialcrossposter.content.PostService;
@@ -120,10 +121,20 @@ public class PublicationService {
 
 	private final DeliveryAttemptRepository attempts;
 
+	private final RevisionMediaRepository revisionMedia;
+
+	/**
+	 * UC-13 first slice: revisions with attached media are blocked from publishing
+	 * fail-closed until the platform upload/import slice lands.
+	 */
+	public static final String BLOCKER_MEDIA_NOT_PUBLISHED = "This revision has attached images, but platform "
+			+ "media upload is not implemented yet (UC-13 later slice) — detach the images or publish a "
+			+ "text-only revision.";
+
 	public PublicationService(PostService posts, PreviewService previewService, MentionResolver mentions,
 			AccountRepository accounts, ConnectionRepository connections, SecretCipher secrets,
 			PublisherRegistry publishers, ReconcilerRegistry reconcilers, PublicationRepository publications,
-			DeliveryRepository deliveries, DeliveryAttemptRepository attempts) {
+			DeliveryRepository deliveries, DeliveryAttemptRepository attempts, RevisionMediaRepository revisionMedia) {
 		this.posts = posts;
 		this.previewService = previewService;
 		this.mentions = mentions;
@@ -135,6 +146,7 @@ public class PublicationService {
 		this.publications = publications;
 		this.deliveries = deliveries;
 		this.attempts = attempts;
+		this.revisionMedia = revisionMedia;
 	}
 
 	/**
@@ -177,7 +189,10 @@ public class PublicationService {
 			throw new PublicationException("Select at least one destination before publishing.");
 		}
 		List<DestinationPreview> previews = previewsFor(workspaceId, revision);
-		List<String> blockers = blockersOf(previews);
+		List<String> blockers = new java.util.ArrayList<>(blockersOf(previews));
+		if (!this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revision.id()).isEmpty()) {
+			blockers.add(BLOCKER_MEDIA_NOT_PUBLISHED);
+		}
 		if (!blockers.isEmpty()) {
 			throw new PublicationException("Publishing is blocked: " + String.join(" ", blockers));
 		}
@@ -211,7 +226,11 @@ public class PublicationService {
 	 */
 	public List<String> blockersOf(Long workspaceId, Long revisionId) {
 		PostRevision revision = this.posts.requireRevisionById(workspaceId, revisionId);
-		return blockersOf(previewsFor(workspaceId, revision));
+		List<String> blockers = new java.util.ArrayList<>(blockersOf(previewsFor(workspaceId, revision)));
+		if (!this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revisionId).isEmpty()) {
+			blockers.add(BLOCKER_MEDIA_NOT_PUBLISHED);
+		}
+		return blockers;
 	}
 
 	/**

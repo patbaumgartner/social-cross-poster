@@ -26,11 +26,16 @@ services:
       APP_SECRETS_KEY: ${APP_SECRETS_KEY}
       APP_SECRETS_KEY_ID: ${APP_SECRETS_KEY_ID:-v1}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      # Private media library lives on a dedicated volume (ADR-008, UC-13) —
+      # never a public image host.
+      APP_MEDIA_DIR: /data/media
     ports:
       # Loopback only: single-owner app behind a TLS-terminating reverse proxy.
       - "127.0.0.1:8080:8080"
       # Loopback only: actuator/health is not behind the owner login (ADR-005).
       - "127.0.0.1:8081:8081"
+    volumes:
+      - app_data:/data
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
       interval: 30s
@@ -58,3 +63,4 @@ services:
 
 volumes:
   db_data:
+  app_data:

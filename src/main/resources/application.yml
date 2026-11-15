@@ -11,6 +11,10 @@ spring:
   flyway:
     enabled: true
   servlet:
+    multipart:
+      # UC-13 media uploads: capped at the app.media.max-bytes limit (10 MB default).
+      max-file-size: 10MB
+      max-request-size: 12MB
     session:
       cookie:
         http-only: true
@@ -52,3 +56,9 @@ app:
     backoff-base-seconds: ${APP_WORKER_BACKOFF_BASE_SECONDS:60}
     backoff-cap-seconds: ${APP_WORKER_BACKOFF_CAP_SECONDS:3600}
     instance-id: ${APP_WORKER_INSTANCE_ID:}
+  media:
+    # Private source media only (ADR-008, UC-13): local disk, authenticated download,
+    # never a permanent public URL. In the baseline compose deployment this is a
+    # dedicated volume (/data/media).
+    dir: ${APP_MEDIA_DIR:data/media}
+    max-bytes: ${APP_MEDIA_MAX_BYTES:10485760}

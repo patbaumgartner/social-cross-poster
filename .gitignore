@@ -8,6 +8,9 @@ node_modules/
 *.pem
 *.key
 
+# ── Local private media library (ADR-008) ────────────────────────────────────
+data/
+
 # ── Editors & OS ─────────────────────────────────────────────────────────────
 .idea/
 *.iml
