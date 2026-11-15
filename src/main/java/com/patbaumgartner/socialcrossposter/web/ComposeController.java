@@ -195,6 +195,29 @@ public class ComposeController {
 	}
 
 	/**
+	 * Duplicates the post into a new independent draft in the same workspace (UC-11 steps
+	 * 1–3): the current revision's text, destinations and overrides are copied into the
+	 * new post's first revision; approval, schedules, submission keys, external ids and
+	 * delivery outcomes are not copied. The source post is never changed; foreign post
+	 * ids fail closed (ADR-013).
+	 */
+	@PostMapping("/w/{slug}/posts/{id}/duplicate")
+	public String duplicate(@PathVariable String slug, @PathVariable Long id, RedirectAttributes redirect) {
+		return withWorkspace(slug, (workspace) -> {
+			try {
+				Post copy = this.posts.duplicatePost(workspace.id(), id);
+				redirect.addFlashAttribute("notice", "Duplicated as new draft post #" + copy.id()
+						+ " — it has its own lifecycle and nothing was copied from schedules, publications or outcomes. The source post was not changed.");
+				return "redirect:/w/" + slug + "/posts/" + copy.id();
+			}
+			catch (PostException ex) {
+				redirect.addFlashAttribute("error", ex.getMessage());
+				return "redirect:/w/" + slug + "/posts/" + id;
+			}
+		});
+	}
+
+	/**
 	 * HTMX preview fragment (UC-04 step 6): per-destination preview of the current
 	 * revision. An optional {@code text} parameter previews unsaved edits without
 	 * creating a revision.

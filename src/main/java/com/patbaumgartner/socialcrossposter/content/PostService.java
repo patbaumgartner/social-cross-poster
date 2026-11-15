@@ -146,6 +146,30 @@ public class PostService {
 	}
 
 	/**
+	 * Duplicates a post into a NEW independent draft in the same workspace (UC-11 steps
+	 * 1–3): a new post id with its own first revision copies the current revision's
+	 * default text, selected destinations and layered overrides. Approval, schedules,
+	 * submission keys, external ids and delivery outcomes are NOT copied — the new post
+	 * starts its own lifecycle as DRAFT with no authority to publish until approved
+	 * (UC-11 postconditions). The source post and all its revisions stay untouched, and a
+	 * different workspace can never be the copy destination (UC-11 alternative flow 5);
+	 * foreign post ids fail closed (ADR-013).
+	 */
+	@Transactional
+	public Post duplicatePost(Long workspaceId, Long postId) {
+		Post source = requirePost(workspaceId, postId);
+		PostRevision current = currentRevision(workspaceId, postId);
+		Set<Long> accountIds = this.destinations.findAllByRevisionId(current.id())
+			.stream()
+			.map(RevisionDestination::accountId)
+			.collect(Collectors.toSet());
+		List<RevisionOverride> copiedOverrides = this.overrides.findAllByRevisionId(current.id());
+		String copyTitle = source.title() == null || source.title().isBlank() ? "Post copy"
+				: source.title() + " (copy)";
+		return createPost(workspaceId, copyTitle, current.defaultText(), accountIds, copiedOverrides);
+	}
+
+	/**
 	 * Renames the post container (title is workspace-local metadata, not revision
 	 * content).
 	 */
