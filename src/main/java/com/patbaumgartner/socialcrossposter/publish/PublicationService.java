@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -25,9 +26,13 @@ import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverride;
 import com.patbaumgartner.socialcrossposter.platform.PlatformPublisher;
+import com.patbaumgartner.socialcrossposter.platform.PlatformReconciler;
 import com.patbaumgartner.socialcrossposter.platform.PublishContext;
 import com.patbaumgartner.socialcrossposter.platform.PublishResult;
 import com.patbaumgartner.socialcrossposter.platform.PublisherRegistry;
+import com.patbaumgartner.socialcrossposter.platform.ReconcileContext;
+import com.patbaumgartner.socialcrossposter.platform.ReconcileResult;
+import com.patbaumgartner.socialcrossposter.platform.ReconcilerRegistry;
 
 /**
  * Workspace-scoped publication service (UC-05 first slice, ADR-001, ADR-004, ADR-013,
@@ -36,9 +41,11 @@ import com.patbaumgartner.socialcrossposter.platform.PublisherRegistry;
  * idempotent: the same key with the same payload hash returns the existing publication, a
  * different hash under the same key is rejected. Preview blockers (over-limit, explicit
  * clear) block publishing. {@link #executeDelivery} runs one PENDING delivery
- * synchronously in the request (durable jobs/leases/worker execution land with UC-07),
- * classifies the provider outcome (SUCCESS / FAILED / UNKNOWN) and appends a redacted
- * attempt. {@link #refreshAggregate} derives the ADR-015 aggregate state in the
+ * synchronously in the request, classifies the provider outcome (SUCCESS / FAILED /
+ * UNKNOWN) and appends a redacted attempt; {@link #executeRetry} re-runs one attempt on a
+ * retryable (failed/uncertain) delivery and {@link #reconcileDelivery} resolves UNKNOWN
+ * outcomes through the platform reconciler — both driven by the durable job worker
+ * (UC-07). {@link #refreshAggregate} derives the ADR-015 aggregate state in the
  * documented priority order. All lookups are workspace-scoped and fail closed for foreign
  * ids (ADR-013); credentials are decrypted per delivery with the AAD-bound cipher and
  * never logged (ADR-007).
@@ -64,6 +71,15 @@ public class PublicationService {
 	public static final String D_UNKNOWN = "UNKNOWN";
 
 	public static final String D_NEEDS_REVIEW = "NEEDS_REVIEW";
+
+	public static final String D_NEEDS_ATTENTION = "NEEDS_ATTENTION";
+
+	/**
+	 * Delivery states from which a retry attempt may be executed (UC-07 step 1): failed
+	 * or uncertain deliveries. SUCCESS, SKIPPED and CANCELED deliveries are never re-run.
+	 */
+	public static final Set<String> RETRYABLE_DELIVERY_STATES = Set.of(D_FAILED, D_UNKNOWN, D_RETRY_WAIT,
+			D_NEEDS_ATTENTION, D_NEEDS_REVIEW);
 
 	// Aggregate publication states (ADR-015 priority order).
 	public static final String P_IN_PROGRESS = "IN_PROGRESS";
@@ -96,6 +112,8 @@ public class PublicationService {
 
 	private final PublisherRegistry publishers;
 
+	private final ReconcilerRegistry reconcilers;
+
 	private final PublicationRepository publications;
 
 	private final DeliveryRepository deliveries;
@@ -104,8 +122,8 @@ public class PublicationService {
 
 	public PublicationService(PostService posts, PreviewService previewService, MentionResolver mentions,
 			AccountRepository accounts, ConnectionRepository connections, SecretCipher secrets,
-			PublisherRegistry publishers, PublicationRepository publications, DeliveryRepository deliveries,
-			DeliveryAttemptRepository attempts) {
+			PublisherRegistry publishers, ReconcilerRegistry reconcilers, PublicationRepository publications,
+			DeliveryRepository deliveries, DeliveryAttemptRepository attempts) {
 		this.posts = posts;
 		this.previewService = previewService;
 		this.mentions = mentions;
@@ -113,6 +131,7 @@ public class PublicationService {
 		this.connections = connections;
 		this.secrets = secrets;
 		this.publishers = publishers;
+		this.reconcilers = reconcilers;
 		this.publications = publications;
 		this.deliveries = deliveries;
 		this.attempts = attempts;
@@ -176,25 +195,99 @@ public class PublicationService {
 	}
 
 	/**
-	 * Executes one PENDING delivery synchronously: decrypts the connection secret with
-	 * its AAD, calls the platform publisher and appends a redacted attempt.
-	 * Missing/disabled connection or destination, undecryptable secret, or no wired
-	 * publisher become NEEDS_REVIEW without a remote write. Non-PENDING deliveries are
-	 * returned unchanged (only PENDING is executed in this slice; RUNNING/RETRY_WAIT
-	 * leases land with UC-07).
+	 * Executes one PENDING delivery synchronously in the request (UC-05 first slice):
+	 * decrypts the connection secret with its AAD, calls the platform publisher and
+	 * appends a redacted attempt. Missing/disabled connection or destination,
+	 * undecryptable secret, or no wired publisher become NEEDS_REVIEW without a remote
+	 * write. Non-PENDING deliveries are returned unchanged — retries go through
+	 * {@link #executeRetry} (UC-07).
 	 */
 	@Transactional
 	public Delivery executeDelivery(Long workspaceId, String workspaceSlug, Long deliveryId) {
-		Delivery delivery = this.deliveries.findByIdAndWorkspaceId(deliveryId, workspaceId)
-			.orElseThrow(() -> new PublicationException("Unknown delivery for this workspace."));
+		Delivery delivery = requireDelivery(workspaceId, deliveryId);
 		if (!D_PENDING.equals(delivery.state())) {
+			return delivery;
+		}
+		return doExecute(workspaceId, workspaceSlug, delivery);
+	}
+
+	/**
+	 * Executes one retry attempt on a retryable delivery (UC-07 step 1): FAILED, UNKNOWN,
+	 * RETRY_WAIT, NEEDS_ATTENTION or NEEDS_REVIEW. Successful, skipped or canceled
+	 * deliveries are never re-run — this throws for them. The exact frozen payload is
+	 * re-sent with the same workspace-scoped idempotency key.
+	 */
+	@Transactional
+	public Delivery executeRetry(Long workspaceId, String workspaceSlug, Long deliveryId) {
+		Delivery delivery = requireDelivery(workspaceId, deliveryId);
+		if (!RETRYABLE_DELIVERY_STATES.contains(delivery.state())) {
+			throw new PublicationException("Delivery #" + deliveryId + " in state " + delivery.state()
+					+ " is not retryable — successful, skipped or canceled deliveries are never re-run.");
+		}
+		return doExecute(workspaceId, workspaceSlug, delivery);
+	}
+
+	/**
+	 * Reconciles an uncertain (UNKNOWN/NEEDS_ATTENTION) delivery through the platform's
+	 * verified read-back (UC-07 step 2, ADR-015): CONFIRMED records SUCCESS with the
+	 * provider external ref, NOT_CONFIRMED records FAILED (the job layer may schedule a
+	 * safe repeat of the frozen payload), INCONCLUSIVE records NEEDS_ATTENTION — never a
+	 * blind retry. Appends a redacted {@code reconcile} attempt; other states are
+	 * returned unchanged.
+	 */
+	@Transactional
+	public Delivery reconcileDelivery(Long workspaceId, String workspaceSlug, Long deliveryId) {
+		Delivery delivery = requireDelivery(workspaceId, deliveryId);
+		if (!D_UNKNOWN.equals(delivery.state()) && !D_NEEDS_ATTENTION.equals(delivery.state())) {
 			return delivery;
 		}
 		AccountDestination destination = this.accounts.findByIdAndWorkspaceId(delivery.accountId(), workspaceId)
 			.orElseThrow(() -> new PublicationException("Unknown destination for this workspace."));
-		int attemptNo = this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(delivery.id())
-			.map((a) -> a.attemptNo() + 1)
-			.orElse(1);
+		int attemptNo = nextAttemptNo(delivery.id());
+		OffsetDateTime now = OffsetDateTime.now();
+		Optional<Connection> connectionOpt = this.connections.findByIdAndWorkspaceId(destination.connectionId(),
+				workspaceId);
+		if (connectionOpt.isEmpty() || !connectionOpt.get().enabled() || !destination.enabled()) {
+			recordAttempt(workspaceId, delivery.id(), attemptNo, "reconcile", "FAILED",
+					"No usable connection for this destination (missing or disabled) — review required.", null, now);
+			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+		}
+		Connection connection = connectionOpt.get();
+		String credential;
+		try {
+			credential = this.secrets.open(
+					SecretCipher.associatedData(workspaceSlug, connection.platform(), connection.providerPrincipal()),
+					new SecretCipher.SealedSecret(connection.secretCipher(), connection.secretNonce(),
+							connection.secretKeyId()));
+		}
+		catch (RuntimeException ex) {
+			recordAttempt(workspaceId, delivery.id(), attemptNo, "reconcile", "FAILED",
+					"Stored credential could not be decrypted for this destination — review required.", null, now);
+			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+		}
+		Optional<PlatformReconciler> reconcilerOpt = this.reconcilers.find(delivery.platform());
+		if (reconcilerOpt.isEmpty()) {
+			recordAttempt(workspaceId, delivery.id(), attemptNo, "reconcile", "FAILED",
+					"No reconciler wired for platform '" + delivery.platform() + "' — review required.", null, now);
+			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+		}
+		ReconcileResult result = reconcilerOpt.get()
+			.reconcile(new ReconcileContext(credential, delivery.providerAccountId(), delivery.payloadText(),
+					delivery.publicationId() + ":" + delivery.id()));
+		recordAttempt(workspaceId, delivery.id(), attemptNo, "reconcile", result.outcome().name(), result.detail(),
+				result.externalRef(), now);
+		String state = switch (result.outcome()) {
+			case CONFIRMED -> D_SUCCESS;
+			case NOT_CONFIRMED -> D_FAILED;
+			case INCONCLUSIVE -> D_NEEDS_ATTENTION;
+		};
+		return saveDeliveryState(delivery, state, result.externalRef(), now);
+	}
+
+	private Delivery doExecute(Long workspaceId, String workspaceSlug, Delivery delivery) {
+		AccountDestination destination = this.accounts.findByIdAndWorkspaceId(delivery.accountId(), workspaceId)
+			.orElseThrow(() -> new PublicationException("Unknown destination for this workspace."));
+		int attemptNo = nextAttemptNo(delivery.id());
 		OffsetDateTime now = OffsetDateTime.now();
 		Optional<Connection> connectionOpt = this.connections.findByIdAndWorkspaceId(destination.connectionId(),
 				workspaceId);
@@ -252,10 +345,10 @@ public class PublicationService {
 
 	/**
 	 * ADR-015 aggregate derivation in the documented priority order: any
-	 * PENDING/RUNNING/RETRY_WAIT → IN_PROGRESS; any UNKNOWN → NEEDS_ATTENTION; any
-	 * NEEDS_REVIEW → NEEDS_REVIEW; all SUCCESS → PUBLISHED; ≥1 SUCCESS → PARTIAL; all
-	 * CANCELED → CANCELED; all SKIPPED/CANCELED with ≥1 SKIPPED → SKIPPED; otherwise
-	 * FAILED.
+	 * PENDING/RUNNING/RETRY_WAIT → IN_PROGRESS; any UNKNOWN/NEEDS_ATTENTION →
+	 * NEEDS_ATTENTION; any NEEDS_REVIEW → NEEDS_REVIEW; all SUCCESS → PUBLISHED; ≥1
+	 * SUCCESS → PARTIAL; all CANCELED → CANCELED; all SKIPPED/CANCELED with ≥1 SKIPPED →
+	 * SKIPPED; otherwise FAILED.
 	 */
 	static String deriveAggregate(List<Delivery> deliveries) {
 		if (deliveries.isEmpty()) {
@@ -267,7 +360,7 @@ public class PublicationService {
 		if (anyInFlight) {
 			return P_IN_PROGRESS;
 		}
-		if (deliveries.stream().anyMatch((d) -> D_UNKNOWN.equals(d.state()))) {
+		if (deliveries.stream().anyMatch((d) -> D_UNKNOWN.equals(d.state()) || D_NEEDS_ATTENTION.equals(d.state()))) {
 			return P_NEEDS_ATTENTION;
 		}
 		if (deliveries.stream().anyMatch((d) -> D_NEEDS_REVIEW.equals(d.state()))) {
@@ -290,6 +383,33 @@ public class PublicationService {
 			return P_SKIPPED;
 		}
 		return P_FAILED;
+	}
+
+	public Delivery requireDelivery(Long workspaceId, Long deliveryId) {
+		return this.deliveries.findByIdAndWorkspaceId(deliveryId, workspaceId)
+			.orElseThrow(() -> new PublicationException("Unknown delivery for this workspace."));
+	}
+
+	/**
+	 * Updates only the mutable state/external ref of a delivery (workspace-scoped,
+	 * ADR-013); used by the UC-07 job layer to move deliveries to
+	 * RETRY_WAIT/NEEDS_ATTENTION.
+	 */
+	@Transactional
+	public Delivery updateDeliveryState(Long workspaceId, Long deliveryId, String state, String externalRef) {
+		Delivery delivery = requireDelivery(workspaceId, deliveryId);
+		return saveDeliveryState(delivery, state, externalRef, OffsetDateTime.now());
+	}
+
+	/** Number of attempts recorded so far for a delivery (UC-07 retry budget). */
+	public long attemptCount(Long deliveryId) {
+		return this.attempts.countByDeliveryId(deliveryId);
+	}
+
+	private int nextAttemptNo(Long deliveryId) {
+		return this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(deliveryId)
+			.map((a) -> a.attemptNo() + 1)
+			.orElse(1);
 	}
 
 	public Publication requirePublication(Long workspaceId, Long publicationId) {

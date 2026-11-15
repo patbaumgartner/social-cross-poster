@@ -22,9 +22,13 @@ import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.platform.PlatformPublisher;
+import com.patbaumgartner.socialcrossposter.platform.PlatformReconciler;
 import com.patbaumgartner.socialcrossposter.platform.PublishContext;
 import com.patbaumgartner.socialcrossposter.platform.PublishResult;
 import com.patbaumgartner.socialcrossposter.platform.PublisherRegistry;
+import com.patbaumgartner.socialcrossposter.platform.ReconcileContext;
+import com.patbaumgartner.socialcrossposter.platform.ReconcileResult;
+import com.patbaumgartner.socialcrossposter.platform.ReconcilerRegistry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,7 +52,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * delivery execution classifies SUCCESS/FAILED/UNKNOWN and appends redacted attempts,
  * missing connections become NEEDS_REVIEW without a remote write, non-PENDING deliveries
  * are not re-executed, foreign ids fail closed, and the ADR-015 aggregate derivation
- * follows the documented priority order. Mocked dependencies, no Spring context.
+ * follows the documented priority order (UC-05). UC-07 additions: retries run only on
+ * retryable states (never on SUCCESS/SKIPPED/CANCELED) with the next attempt number, and
+ * UNKNOWN deliveries are reconciled through the platform reconciler (CONFIRMED → SUCCESS,
+ * INCONCLUSIVE → NEEDS_ATTENTION, non-uncertain states untouched). Mocked dependencies,
+ * no Spring context.
  */
 class PublicationServiceTest {
 
@@ -90,6 +98,10 @@ class PublicationServiceTest {
 
 	private PlatformPublisher publisher;
 
+	private ReconcilerRegistry reconcilers;
+
+	private PlatformReconciler reconciler;
+
 	private PublicationService service;
 
 	private Post post;
@@ -109,12 +121,15 @@ class PublicationServiceTest {
 		this.connections = mock(ConnectionRepository.class);
 		this.secrets = mock(SecretCipher.class);
 		this.publishers = mock(PublisherRegistry.class);
+		this.reconcilers = mock(ReconcilerRegistry.class);
 		this.publications = mock(PublicationRepository.class);
 		this.deliveries = mock(DeliveryRepository.class);
 		this.attempts = mock(DeliveryAttemptRepository.class);
 		this.publisher = mock(PlatformPublisher.class);
+		this.reconciler = mock(PlatformReconciler.class);
 		this.service = new PublicationService(this.posts, this.previewService, this.mentions, this.accounts,
-				this.connections, this.secrets, this.publishers, this.publications, this.deliveries, this.attempts);
+				this.connections, this.secrets, this.publishers, this.reconcilers, this.publications, this.deliveries,
+				this.attempts);
 
 		this.post = new Post(POST_ID, WS, "Title", PostService.STATE_DRAFT, REVISION_ID, 1L, NOW, NOW);
 		this.revision = new PostRevision(REVISION_ID, WS, POST_ID, 1, "hello", NOW);
@@ -337,6 +352,79 @@ class PublicationServiceTest {
 	}
 
 	@Test
+	void executeRetryRejectsSuccessfulDeliveryAndNeverCallsProvider() {
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS))
+			.willReturn(Optional.of(deliveryWithState(PublicationService.D_SUCCESS)));
+
+		assertThatThrownBy(() -> this.service.executeRetry(WS, "private", DELIVERY))
+			.isInstanceOf(PublicationException.class)
+			.hasMessageContaining("never re-run");
+		verifyNoInteractions(this.publisher);
+	}
+
+	@Test
+	void executeRetryRunsFailedDeliveryAgainWithNextAttemptNo() {
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS))
+			.willReturn(Optional.of(deliveryWithState(PublicationService.D_FAILED)));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY))
+			.willReturn(Optional.of(new DeliveryAttempt(1L, WS, DELIVERY, 1, "send", "FAILED", "HTTP 400", null, NOW)));
+		given(this.publisher.publish(any(PublishContext.class)))
+			.willReturn(PublishResult.success("telegram:message:43"));
+
+		Delivery result = this.service.executeRetry(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_SUCCESS);
+		assertThat(result.externalRef()).isEqualTo("telegram:message:43");
+		verify(this.attempts).save(argThat((DeliveryAttempt a) -> a.attemptNo() == 2 && "send".equals(a.stage())
+				&& "SUCCESS".equals(a.outcome()) && "telegram:message:43".equals(a.externalRef())));
+	}
+
+	@Test
+	void reconcileConfirmedRecordsSuccessWithExternalRef() {
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS))
+			.willReturn(Optional.of(deliveryWithState(PublicationService.D_UNKNOWN)));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.reconcilers.find("telegram")).willReturn(Optional.of(this.reconciler));
+		given(this.reconciler.reconcile(any(ReconcileContext.class)))
+			.willReturn(ReconcileResult.confirmed("telegram:message:42"));
+
+		Delivery result = this.service.reconcileDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_SUCCESS);
+		assertThat(result.externalRef()).isEqualTo("telegram:message:42");
+		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "reconcile".equals(a.stage())
+				&& "CONFIRMED".equals(a.outcome()) && "telegram:message:42".equals(a.externalRef())));
+	}
+
+	@Test
+	void reconcileInconclusiveBecomesNeedsAttentionAndIsNeverBlindlyRetried() {
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS))
+			.willReturn(Optional.of(deliveryWithState(PublicationService.D_UNKNOWN)));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.reconcilers.find("telegram")).willReturn(Optional.of(this.reconciler));
+		given(this.reconciler.reconcile(any(ReconcileContext.class)))
+			.willReturn(ReconcileResult.inconclusive("no read-back available"));
+
+		Delivery result = this.service.reconcileDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_NEEDS_ATTENTION);
+		assertThat(result.externalRef()).isNull();
+		verify(this.attempts)
+			.save(argThat((DeliveryAttempt a) -> "reconcile".equals(a.stage()) && "INCONCLUSIVE".equals(a.outcome())));
+	}
+
+	@Test
+	void reconcileSkipsNonUncertainDeliveries() {
+		Delivery done = deliveryWithState(PublicationService.D_SUCCESS);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(done));
+
+		Delivery result = this.service.reconcileDelivery(WS, "private", DELIVERY);
+
+		assertThat(result).isSameAs(done);
+		verifyNoInteractions(this.reconciler, this.secrets);
+	}
+
+	@Test
 	void refreshAggregateDerivesAndPersistsAdr015State() {
 		Publication inProgress = new Publication(PUB, WS, POST_ID, REVISION_ID, "key-1",
 				PublicationService.P_IN_PROGRESS, "hash", NOW, NOW);
@@ -358,6 +446,8 @@ class PublicationServiceTest {
 			.isEqualTo(PublicationService.P_IN_PROGRESS);
 		assertThat(PublicationService.deriveAggregate(List.of(delivery("UNKNOWN"), delivery("SUCCESS"))))
 			.isEqualTo(PublicationService.P_NEEDS_ATTENTION);
+		assertThat(PublicationService.deriveAggregate(List.of(delivery("NEEDS_ATTENTION"), delivery("SUCCESS"))))
+			.isEqualTo(PublicationService.P_NEEDS_ATTENTION);
 		assertThat(PublicationService.deriveAggregate(List.of(delivery("NEEDS_REVIEW"), delivery("SUCCESS"))))
 			.isEqualTo(PublicationService.P_NEEDS_REVIEW);
 		assertThat(PublicationService.deriveAggregate(List.of(delivery("SUCCESS"), delivery("SUCCESS"))))
@@ -374,8 +464,12 @@ class PublicationServiceTest {
 	}
 
 	private Delivery pendingDelivery() {
+		return deliveryWithState(PublicationService.D_PENDING);
+	}
+
+	private Delivery deliveryWithState(String state) {
 		return new Delivery(DELIVERY, WS, PUB, ACCOUNT, "telegram", "News channel", null, "-100123", "hello",
-				"abc123hash", PublicationService.D_PENDING, null, NOW, NOW);
+				"abc123hash", state, null, NOW, NOW);
 	}
 
 	private Delivery delivery(String state) {
