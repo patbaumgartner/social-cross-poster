@@ -17,4 +17,13 @@ public interface PlatformPublisher {
 	 */
 	PublishResult publish(PublishContext context);
 
+	/**
+	 * Whether this platform can upload attached images directly (UC-13, ADR-008).
+	 * Defaults to {@code false} so publishing a media-attached revision to a platform
+	 * without upload support stays blocked fail-closed.
+	 */
+	default boolean supportsMediaUpload() {
+		return false;
+	}
+
 }
