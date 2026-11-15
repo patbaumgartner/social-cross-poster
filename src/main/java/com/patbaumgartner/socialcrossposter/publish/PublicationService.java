@@ -22,6 +22,7 @@ import com.patbaumgartner.socialcrossposter.accounts.SecretCipher;
 import com.patbaumgartner.socialcrossposter.contacts.MentionResolver;
 import com.patbaumgartner.socialcrossposter.content.DestinationPreview;
 import com.patbaumgartner.socialcrossposter.media.MediaAsset;
+import com.patbaumgartner.socialcrossposter.media.MediaException;
 import com.patbaumgartner.socialcrossposter.media.MediaService;
 import com.patbaumgartner.socialcrossposter.media.RevisionMedia;
 import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
@@ -599,9 +600,11 @@ public class PublicationService {
 	}
 
 	/**
-	 * Resolves the delivery's media snapshot to private source bytes for the upload
-	 * (UC-13 second slice). Returns {@code null} when an approved image is no longer in
-	 * the workspace library — the caller fails closed (NEEDS_REVIEW, no remote write).
+	 * Resolves the delivery's media snapshot to the outgoing (metadata-stripped)
+	 * derivative bytes for the direct upload (UC-13 second/third slice, ADR-008,
+	 * ADR-016). Returns {@code null} when an approved image or its derivative is no
+	 * longer in the workspace library — the caller fails closed (NEEDS_REVIEW, no remote
+	 * write).
 	 */
 	private List<MediaAttachment> mediaAttachmentsOf(Long workspaceId, Delivery delivery) {
 		List<DeliveryMedia> rows = this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(delivery.id());
@@ -614,8 +617,14 @@ public class PublicationService {
 			if (asset == null) {
 				return null;
 			}
-			result.add(new MediaAttachment(asset.filename(), asset.contentType(),
-					this.media.fileBytes(workspaceId, asset.id()), row.altText()));
+			final byte[] outgoing;
+			try {
+				outgoing = this.media.outgoingBytes(workspaceId, row.sha256());
+			}
+			catch (MediaException ex) {
+				return null;
+			}
+			result.add(new MediaAttachment(asset.filename(), asset.contentType(), outgoing, row.altText()));
 		}
 		return result;
 	}

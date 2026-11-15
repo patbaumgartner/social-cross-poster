@@ -35,6 +35,18 @@ import com.patbaumgartner.socialcrossposter.content.PostService;
  * so historical revisions stay immutable (ADR-015). Every attached image requires a
  * meaningful local alt text (ADR-016). All lookups are workspace-scoped and fail closed
  * on foreign ids (ADR-013).
+ *
+ * <p>
+ * UC-13 third slice (ADR-016 metadata policy): every upload additionally gets a
+ * metadata-stripped outgoing derivative stored as {@code
+ *
+<dir>
+ * /<workspaceId>/out-<sha256>} (EXIF/XMP/IPTC/text/comments removed at the container
+ * level by {@link OutgoingImageSanitizer}; pixels, animation and color profile are
+ * preserved). The private original keeps its metadata; only the derivative is ever sent
+ * to a platform. The derivative is fixed at upload time, so a policy change cannot
+ * silently replace the bytes under an existing approval (ADR-016). Unparsable images are
+ * rejected fail-closed at upload.
  */
 @Service
 public class MediaService {
@@ -57,7 +69,11 @@ public class MediaService {
 
 	/**
 	 * Uploads one image into the workspace library. Deduplicated by content hash:
-	 * re-uploading identical bytes returns the existing asset and writes nothing.
+	 * re-uploading identical bytes returns the existing asset and writes nothing. Next to
+	 * the private original, the metadata-stripped outgoing derivative
+	 * ({@code out-<sha256>}, ADR-016) is stored — the only bytes ever sent to a platform.
+	 * Images that cannot be parsed/sanitized are rejected fail-closed and nothing is
+	 * stored.
 	 */
 	@Transactional
 	public MediaAsset upload(Long workspaceId, String filename, String contentType, byte[] bytes) {
@@ -72,17 +88,31 @@ public class MediaService {
 					+ String.join(", ", this.props.allowedContentTypes()) + ".");
 		}
 		String sha = sha256(bytes);
-		Optional<MediaAsset> existing = this.assets.findByWorkspaceIdAndSha256(workspaceId, sha);
-		if (existing.isPresent()) {
-			return existing.get();
+		final byte[] outgoing;
+		try {
+			outgoing = OutgoingImageSanitizer.strip(contentType.toLowerCase(), bytes);
+		}
+		catch (IllegalArgumentException ex) {
+			throw new MediaException("The image could not be parsed/sanitized for outgoing upload (" + ex.getMessage()
+					+ ") — upload rejected.");
 		}
 		Path file = pathOf(workspaceId, sha);
+		Path outgoingFile = outgoingPathOf(workspaceId, sha);
 		try {
 			Files.createDirectories(file.getParent());
-			Files.write(file, bytes);
+			if (!Files.exists(file)) {
+				Files.write(file, bytes);
+			}
+			if (!Files.exists(outgoingFile)) {
+				Files.write(outgoingFile, outgoing);
+			}
 		}
 		catch (IOException ex) {
 			throw new UncheckedIOException("Could not store the uploaded image.", ex);
+		}
+		Optional<MediaAsset> existing = this.assets.findByWorkspaceIdAndSha256(workspaceId, sha);
+		if (existing.isPresent()) {
+			return existing.get();
 		}
 		String safeName = StringUtils.hasText(filename) ? Path.of(filename).getFileName().toString() : "image";
 		return this.assets.save(new MediaAsset(null, workspaceId, safeName, contentType.toLowerCase(),
@@ -127,6 +157,27 @@ public class MediaService {
 	}
 
 	/**
+	 * The metadata-stripped outgoing derivative of one asset (UC-13 third slice,
+	 * ADR-016), resolved by the asset's content hash. Workspace-scoped and fail-closed: a
+	 * foreign/unknown hash or a missing derivative throws {@link MediaException} — the
+	 * dispatch path turns that into NEEDS_REVIEW without a remote write.
+	 */
+	public byte[] outgoingBytes(Long workspaceId, String sha256) {
+		if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
+			throw new MediaException("Invalid content hash.");
+		}
+		if (this.assets.findByWorkspaceIdAndSha256(workspaceId, sha256).isEmpty()) {
+			throw new MediaException("Unknown media asset for this workspace.");
+		}
+		try {
+			return Files.readAllBytes(outgoingPathOf(workspaceId, sha256));
+		}
+		catch (IOException ex) {
+			throw new MediaException("The outgoing image derivative is unavailable.");
+		}
+	}
+
+	/**
 	 * Attaches an asset to the post's current revision with a mandatory alt text
 	 * (ADR-016). Attaching to a non-current revision fails closed — save a new revision
 	 * first, older revisions stay immutable (ADR-015).
@@ -164,7 +215,7 @@ public class MediaService {
 
 	/**
 	 * Deletes a library asset — only when no revision of the workspace still references
-	 * it; the stored bytes are removed with it.
+	 * it; the stored original and outgoing derivative bytes are removed with it.
 	 */
 	@Transactional
 	public void deleteAsset(Long workspaceId, Long mediaId) {
@@ -175,6 +226,7 @@ public class MediaService {
 		this.assets.delete(asset);
 		try {
 			Files.deleteIfExists(pathOf(workspaceId, asset.sha256()));
+			Files.deleteIfExists(outgoingPathOf(workspaceId, asset.sha256()));
 		}
 		catch (IOException ex) {
 			throw new UncheckedIOException("The stored image could not be deleted.", ex);
@@ -183,6 +235,10 @@ public class MediaService {
 
 	private Path pathOf(Long workspaceId, String sha256) {
 		return Path.of(this.props.dir(), workspaceId.toString(), sha256);
+	}
+
+	private Path outgoingPathOf(Long workspaceId, String sha256) {
+		return Path.of(this.props.dir(), workspaceId.toString(), "out-" + sha256);
 	}
 
 	private static String sha256(byte[] bytes) {
