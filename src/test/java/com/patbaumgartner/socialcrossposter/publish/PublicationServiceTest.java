@@ -15,6 +15,7 @@ import com.patbaumgartner.socialcrossposter.accounts.ConnectionRepository;
 import com.patbaumgartner.socialcrossposter.accounts.SecretCipher;
 import com.patbaumgartner.socialcrossposter.contacts.MentionResolver;
 import com.patbaumgartner.socialcrossposter.media.MediaAsset;
+import com.patbaumgartner.socialcrossposter.media.MediaException;
 import com.patbaumgartner.socialcrossposter.media.MediaService;
 import com.patbaumgartner.socialcrossposter.media.RevisionMedia;
 import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
@@ -523,8 +524,9 @@ class PublicationServiceTest {
 	}
 
 	@Test
-	void executeDeliveryPassesApprovedMediaBytesToThePublisher() {
-		byte[] png = { 1, 2, 3 };
+	void executeDeliveryPassesApprovedStrippedMediaBytesToThePublisher() {
+		byte[] outgoing = { 9, 8, 7 }; // the metadata-stripped derivative, not the
+										// original (ADR-016)
 		String sha = "e".repeat(64);
 		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
 		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
@@ -532,7 +534,7 @@ class PublicationServiceTest {
 			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
 		given(this.media.findBySha(WS, sha))
 			.willReturn(Optional.of(new MediaAsset(60L, WS, "chart.png", "image/png", 3L, sha, NOW)));
-		given(this.media.fileBytes(WS, 60L)).willReturn(png);
+		given(this.media.outgoingBytes(WS, sha)).willReturn(outgoing);
 		given(this.publisher.publish(any(PublishContext.class)))
 			.willReturn(PublishResult.success("telegram:message:42"));
 
@@ -545,8 +547,27 @@ class PublicationServiceTest {
 		assertThat(media).hasSize(1);
 		assertThat(media.get(0).filename()).isEqualTo("chart.png");
 		assertThat(media.get(0).contentType()).isEqualTo("image/png");
-		assertThat(media.get(0).bytes()).isEqualTo(png);
+		assertThat(media.get(0).bytes()).isEqualTo(outgoing);
 		assertThat(media.get(0).altText()).isEqualTo("Chart");
+	}
+
+	@Test
+	void executeDeliveryWithMissingOutgoingDerivativeFailsClosedWithoutRemoteWrite() {
+		String sha = "e".repeat(64);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(DELIVERY))
+			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
+		given(this.media.findBySha(WS, sha))
+			.willReturn(Optional.of(new MediaAsset(60L, WS, "chart.png", "image/png", 3L, sha, NOW)));
+		given(this.media.outgoingBytes(WS, sha)).willThrow(new MediaException("derivative unavailable"));
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_NEEDS_REVIEW);
+		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "authorize".equals(a.stage())
+				&& "FAILED".equals(a.outcome()) && a.detail().contains("no longer available")));
+		verifyNoInteractions(this.publisher);
 	}
 
 	@Test
