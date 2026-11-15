@@ -217,16 +217,16 @@ public class DeliveryJobService {
 	}
 
 	/**
-	 * Bounded exponential backoff (UC-07 step 4): {@code min(cap, base * 2^(n-1))} scaled
-	 * by a 0.8-1.2 jitter, at least 1 second, where {@code n} is the attempt count so
-	 * far.
+	 * Bounded exponential backoff (UC-07 step 4): {@code base * 2^(n-1)} scaled by a
+	 * 0.8-1.2 jitter, then capped at {@code cap} and floored at 1 second, where {@code n}
+	 * is the attempt count so far — the result never exceeds the cap.
 	 */
 	public long backoffSeconds(long attemptCount) {
 		long n = Math.max(1L, attemptCount);
 		long exponential = this.props.backoffBaseSeconds() * (1L << Math.min(n - 1, 20));
-		long capped = Math.min(this.props.backoffCapSeconds(), exponential);
 		double jitter = 0.8 + this.random.nextDouble() * 0.4;
-		return Math.max(1L, (long) (capped * jitter));
+		long jittered = (long) (exponential * jitter);
+		return Math.min(this.props.backoffCapSeconds(), Math.max(1L, jittered));
 	}
 
 	private DeliveryJob upsertJob(Long workspaceId, Long deliveryId, String state, OffsetDateTime nextRunAt) {
