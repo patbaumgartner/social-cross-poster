@@ -27,6 +27,7 @@ import com.patbaumgartner.socialcrossposter.content.RevisionOverride;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.Publication;
 import com.patbaumgartner.socialcrossposter.publish.PublicationService;
+import com.patbaumgartner.socialcrossposter.scheduling.ScheduleService;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
@@ -50,13 +51,16 @@ public class ComposeController {
 
 	private final PublicationService publications;
 
+	private final ScheduleService schedules;
+
 	public ComposeController(WorkspaceService workspaces, PostService posts, PreviewService previews,
-			ConnectionService connections, PublicationService publications) {
+			ConnectionService connections, PublicationService publications, ScheduleService schedules) {
 		this.workspaces = workspaces;
 		this.posts = posts;
 		this.previews = previews;
 		this.connections = connections;
 		this.publications = publications;
+		this.schedules = schedules;
 	}
 
 	/** New-post form (UC-04 step 1/3/5): title, default text, destination selection. */
@@ -127,6 +131,7 @@ public class ComposeController {
 							(p) -> this.publications.deliveriesOf(workspace.id(), p.id())));
 				model.addAttribute("publications", pubs);
 				model.addAttribute("deliveriesByPublication", deliveriesByPublication);
+				model.addAttribute("schedules", this.schedules.schedulesOfPost(workspace.id(), id));
 				return "post";
 			}
 			catch (PostException ex) {
