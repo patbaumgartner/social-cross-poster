@@ -3,6 +3,7 @@ package com.patbaumgartner.socialcrossposter.content;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -102,6 +103,27 @@ public class PostService {
 				post.version() + 1, post.createdAt(), OffsetDateTime.now());
 		this.posts.save(saved);
 		return revision;
+	}
+
+	/**
+	 * Restores an earlier revision as a NEW revision (UC-09 step 4): the default text,
+	 * selected destinations and layered overrides of {@code revisionId} are copied into
+	 * the next immutable revision and the current-revision pointer moves there. Nothing
+	 * is deleted or modified — the source revision and all other revisions stay intact
+	 * (ADR-015, ADR-016). The revision must belong to this post and workspace; foreign
+	 * ids fail closed (ADR-013).
+	 */
+	@Transactional
+	public PostRevision restoreRevision(Long workspaceId, Long postId, Long revisionId) {
+		Post post = requirePost(workspaceId, postId);
+		PostRevision source = this.revisions.findByIdAndWorkspaceIdAndPostId(revisionId, workspaceId, postId)
+			.orElseThrow(() -> new PostException("Unknown revision for this post."));
+		Set<Long> accountIds = this.destinations.findAllByRevisionId(source.id())
+			.stream()
+			.map(RevisionDestination::accountId)
+			.collect(Collectors.toSet());
+		List<RevisionOverride> copiedOverrides = this.overrides.findAllByRevisionId(source.id());
+		return saveRevision(post, source.defaultText(), accountIds, copiedOverrides);
 	}
 
 	/**

@@ -161,6 +161,28 @@ public class ComposeController {
 	}
 
 	/**
+	 * Restores an earlier revision as a new revision (UC-09 step 4): text, destinations
+	 * and overrides of the chosen revision are copied into the next immutable revision.
+	 * Nothing is deleted or modified; foreign post/revision ids fail closed (ADR-013).
+	 */
+	@PostMapping("/w/{slug}/posts/{id}/restore/{revisionId}")
+	public String restore(@PathVariable String slug, @PathVariable Long id, @PathVariable Long revisionId,
+			RedirectAttributes redirect) {
+		return withWorkspace(slug, (workspace) -> {
+			try {
+				this.posts.requirePost(workspace.id(), id);
+				PostRevision restored = this.posts.restoreRevision(workspace.id(), id, revisionId);
+				redirect.addFlashAttribute("notice", "Restored the selected revision as new revision #"
+						+ restored.revisionNo() + " — no existing revision was deleted or modified.");
+			}
+			catch (PostException ex) {
+				redirect.addFlashAttribute("error", ex.getMessage());
+			}
+			return "redirect:/w/" + slug + "/posts/" + id;
+		});
+	}
+
+	/**
 	 * HTMX preview fragment (UC-04 step 6): per-destination preview of the current
 	 * revision. An optional {@code text} parameter previews unsaved edits without
 	 * creating a revision.
