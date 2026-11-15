@@ -1,6 +1,6 @@
 # ADR-008 — HTTPS origin, private sources, and platform-hosted images
 
-- **Status:** Accepted; clarified by owner; the private-source side is implemented 2026-11-15 (UC-13 first slice, Flyway V10: workspace media library on local disk under APP_MEDIA_DIR, authenticated-only download, sha256 dedup, no public URLs — platform-hosted publishing and temporary import grants remain planned)
+- **Status:** Accepted; clarified by owner; the private-source side is implemented 2026-11-15 (UC-13 first slice, Flyway V10: workspace media library on local disk under APP_MEDIA_DIR, authenticated-only download, sha256 dedup, no public URLs; the telegram direct-upload side is implemented 2026-11-15 (UC-13 second slice, Flyway V11 `delivery_media` snapshot on each delivery; `sendPhoto`/`sendMediaGroup` multipart of the private source bytes via `MediaAttachment` — still no public URL is ever sent to the provider — with a per-platform fail-closed blocker for destinations whose platform lacks upload support); temporary revocable import grants / source-fetch APIs and provider import verification remain planned)
 - **Date:** 2026-11-13
 
 ## Context
