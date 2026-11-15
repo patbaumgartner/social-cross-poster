@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Remote delete')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — remote delete'">Remote delete</h1>
+    <p><a th:href="@{/w/{slug}/history/{pub}(slug=${workspace.slug},pub=${publicationId})}">&larr; Back to publication</a></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+
+    <section class="card">
+      <h2>Delete the remote post — confirm</h2>
+      <p class="alert" role="alert">This asks <span th:text="${delivery.platform}">platform</span> to delete the
+        published post below. The delete queues a separate remote action; the original delivery and publication
+        record are preserved, and a provider rejection never changes the confirmed delivery (ADR-015).</p>
+      <p>Destination: <strong th:text="${delivery.platform + ' · ' + delivery.destinationLabel}">destination</strong><br>
+        Remote post <code th:text="${delivery.externalRef}">ref</code>
+        · provider identity <code th:text="${delivery.providerAccountId}">id</code></p>
+      <p>Current remote payload:</p>
+      <pre th:text="${delivery.payloadText}">payload</pre>
+      <form method="post" th:action="@{/w/{slug}/history/{pub}/deliveries/{did}/delete(slug=${workspace.slug},pub=${publicationId},did=${delivery.id})}">
+        <button class="primary" type="submit">Confirm remote delete</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

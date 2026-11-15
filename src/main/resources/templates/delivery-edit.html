@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Remote edit')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — remote edit'">Remote edit</h1>
+    <p><a th:href="@{/w/{slug}/history/{pub}(slug=${workspace.slug},pub=${publicationId})}">&larr; Back to publication</a></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+
+    <section class="card">
+      <h2>Edit <span th:text="${delivery.platform + ' · ' + delivery.destinationLabel}">destination</span></h2>
+      <p>Remote post <code th:text="${delivery.externalRef}">ref</code>
+        · provider identity <code th:text="${delivery.providerAccountId}">id</code></p>
+      <p>The edit queues a separate remote action and never rewrites the original delivery (ADR-015).
+        The replacement text must pass the same <span th:text="${delivery.platform}">platform</span> limit of
+        <span th:text="${maxTextLength}">4096</span> characters as publishing — the payload is never truncated.</p>
+      <form method="post" th:action="@{/w/{slug}/history/{pub}/deliveries/{did}/edit(slug=${workspace.slug},pub=${publicationId},did=${delivery.id})}">
+        <div class="field">
+          <label for="text">Replacement text (opens with the last confirmed payload)</label>
+          <textarea id="text" name="text" rows="10" autocomplete="off" th:text="${delivery.payloadText}"></textarea>
+        </div>
+        <button class="primary" type="submit">Apply remote edit</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
