@@ -140,6 +140,8 @@ public class ScheduleService {
 		else {
 			instant = local.atOffset(validOffsets.get(0));
 		}
+		// persist and display the resolved instant normalized to UTC
+		instant = instant.withOffsetSameInstant(ZoneOffset.UTC);
 		OffsetDateTime now = OffsetDateTime.now();
 		if (!instant.isAfter(now)) {
 			throw new ScheduleException("The scheduled time must be in the future (UTC " + instant + ").");

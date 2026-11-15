@@ -143,11 +143,7 @@ public class PublicationService {
 	 */
 	@Transactional
 	public Publication create(Long workspaceId, String workspaceSlug, Long postId, String submissionKey) {
-		Post post = this.posts.requirePost(workspaceId, postId);
-		if (PostService.STATE_ARCHIVED.equals(post.state())) {
-			throw new PublicationException("Archived posts cannot be published.");
-		}
-		return create(workspaceId, workspaceSlug, postId, this.posts.currentRevision(workspaceId, postId).id(),
+		return create(workspaceId, workspaceSlug, postId, this.posts.currentRevision(workspaceId, postId),
 				submissionKey);
 	}
 
@@ -163,6 +159,12 @@ public class PublicationService {
 	@Transactional
 	public Publication create(Long workspaceId, String workspaceSlug, Long postId, Long revisionId,
 			String submissionKey) {
+		return create(workspaceId, workspaceSlug, postId, this.posts.requireRevision(workspaceId, postId, revisionId),
+				submissionKey);
+	}
+
+	private Publication create(Long workspaceId, String workspaceSlug, Long postId, PostRevision revision,
+			String submissionKey) {
 		if (submissionKey == null || submissionKey.isBlank()) {
 			throw new PublicationException("A submission key is required.");
 		}
@@ -170,7 +172,6 @@ public class PublicationService {
 		if (PostService.STATE_ARCHIVED.equals(post.state())) {
 			throw new PublicationException("Archived posts cannot be published.");
 		}
-		PostRevision revision = this.posts.requireRevision(workspaceId, postId, revisionId);
 		List<RevisionDestination> destinations = this.posts.destinationsOf(revision.id());
 		if (destinations.isEmpty()) {
 			throw new PublicationException("Select at least one destination before publishing.");
