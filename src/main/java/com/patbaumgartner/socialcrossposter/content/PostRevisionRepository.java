@@ -9,6 +9,8 @@ public interface PostRevisionRepository extends CrudRepository<PostRevision, Lon
 
 	Optional<PostRevision> findByIdAndWorkspaceId(Long id, Long workspaceId);
 
+	Optional<PostRevision> findByIdAndWorkspaceIdAndPostId(Long id, Long workspaceId, Long postId);
+
 	List<PostRevision> findAllByPostIdOrderByRevisionNoAsc(Long postId);
 
 	Optional<PostRevision> findTopByPostIdOrderByRevisionNoDesc(Long postId);

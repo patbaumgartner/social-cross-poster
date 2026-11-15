@@ -17,6 +17,7 @@
         (ADR-015). Previews below use the saved revision; use “Refresh preview” to preview
         unsaved text.</p>
       <form id="post-form" method="post" th:action="@{/w/{slug}/posts/{id}(slug=${workspace.slug},id=${post.id})}">
+        <input type="hidden" name="expectedVersion" th:value="${post.version}">
         <div class="field">
           <label for="title">Title</label>
           <input id="title" name="title" type="text" maxlength="200" th:value="${post.title}">
@@ -80,6 +81,10 @@
         <li th:each="r : ${revisions}">
           #<span th:text="${r.revisionNo}">1</span> · <small th:text="${r.createdAt}">created</small>
           <span class="badge" th:if="${r.id == revision.id}">current</span>
+          <form th:if="${r.id != revision.id}" method="post" style="display:inline"
+                th:action="@{/w/{slug}/posts/{id}/restore/{rid}(slug=${workspace.slug},id=${post.id},rid=${r.id})}">
+            <button type="submit">Restore as new revision</button>
+          </form>
         </li>
       </ul>
       <h3>Overrides of the current revision</h3>

@@ -1,6 +1,6 @@
 # ADR-004 — Workspace-scoped editorial and publishing domain
 
-- **Status:** Accepted; amended during the pre-implementation review; the `post`/`post_revision`/`revision_destination`/`revision_override` slice is implemented 2026-11-14 (UC-04 first slice, Flyway V4) and the `publication`/`delivery`/`delivery_attempt` slice is implemented 2026-11-14 (UC-05 first slice, Flyway V5); read-only history views over those tables are implemented 2026-11-15 (UC-06 first slice) and the `delivery_job` retry/reconcile slice is implemented 2026-11-15 (UC-07 first slice, Flyway V6 — media, schedule, AI and notification entities remain planned)
+- **Status:** Accepted; amended during the pre-implementation review; the `post`/`post_revision`/`revision_destination`/`revision_override` slice is implemented 2026-11-14 (UC-04 first slice, Flyway V4) and the `publication`/`delivery`/`delivery_attempt` slice is implemented 2026-11-14 (UC-05 first slice, Flyway V5); read-only history views over those tables are implemented 2026-11-15 (UC-06 first slice) and the `delivery_job` retry/reconcile slice is implemented 2026-11-15 (UC-07 first slice, Flyway V6), the `remote_action`/`remote_action_attempt` slice is implemented 2026-11-15 (UC-08 first slice, Flyway V7) and the first UC-09 slice is implemented 2026-11-15 (restore an earlier revision as a new immutable revision + optimistic version-conflict guard on save — no new tables, Flyway stays V1–V7); media, schedule, AI and notification entities remain planned
 - **Date:** 2026-11-13
 
 ## Context

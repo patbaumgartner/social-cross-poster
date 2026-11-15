@@ -136,22 +136,51 @@ public class ComposeController {
 		}).orElse("redirect:/");
 	}
 
-	/** Saves the post as a new immutable revision (next revision_no), never in place. */
+	/**
+	 * Saves the post as a new immutable revision (next revision_no), never in place. The
+	 * form sends the post's optimistic {@code expectedVersion}; on a concurrent-change
+	 * conflict nothing is saved (UC-09 alternative flow 1 — never last-write-wins).
+	 */
 	@PostMapping("/w/{slug}/posts/{id}")
 	public String save(@PathVariable String slug, @PathVariable Long id, @RequestParam(required = false) String title,
 			@RequestParam(required = false) String text, @RequestParam(required = false) List<Long> accountIds,
-			RedirectAttributes redirect) {
+			@RequestParam(required = false) Long expectedVersion, RedirectAttributes redirect) {
 		return withWorkspace(slug, (workspace) -> {
 			try {
 				Post post = this.posts.requirePost(workspace.id(), id);
-				PostRevision revision = this.posts.saveRevision(post, text == null ? "" : text,
-						accountIds == null ? Set.of() : new TreeSet<>(accountIds), List.of());
+				Set<Long> selected = accountIds == null ? Set.of() : new TreeSet<>(accountIds);
+				PostRevision revision = expectedVersion == null
+						? this.posts.saveRevision(post, text == null ? "" : text, selected, List.of())
+						: this.posts.saveRevisionIfVersion(post, expectedVersion, text == null ? "" : text, selected,
+								List.of());
 				if (StringUtils.hasText(title) && !title.equals(post.title())) {
 					// title lives on the post container; update it together with the new
 					// revision
 					this.posts.saveRevisionTitle(post, title);
 				}
 				redirect.addFlashAttribute("notice", "Saved as revision " + revision.revisionNo() + ".");
+			}
+			catch (PostException ex) {
+				redirect.addFlashAttribute("error", ex.getMessage());
+			}
+			return "redirect:/w/" + slug + "/posts/" + id;
+		});
+	}
+
+	/**
+	 * Restores an earlier revision as a new revision (UC-09 step 4): text, destinations
+	 * and overrides of the chosen revision are copied into the next immutable revision.
+	 * Nothing is deleted or modified; foreign post/revision ids fail closed (ADR-013).
+	 */
+	@PostMapping("/w/{slug}/posts/{id}/restore/{revisionId}")
+	public String restore(@PathVariable String slug, @PathVariable Long id, @PathVariable Long revisionId,
+			RedirectAttributes redirect) {
+		return withWorkspace(slug, (workspace) -> {
+			try {
+				this.posts.requirePost(workspace.id(), id);
+				PostRevision restored = this.posts.restoreRevision(workspace.id(), id, revisionId);
+				redirect.addFlashAttribute("notice", "Restored the selected revision as new revision #"
+						+ restored.revisionNo() + " — no existing revision was deleted or modified.");
 			}
 			catch (PostException ex) {
 				redirect.addFlashAttribute("error", ex.getMessage());
