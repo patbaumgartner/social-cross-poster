@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import com.patbaumgartner.socialcrossposter.notify.NotificationService;
 import com.patbaumgartner.socialcrossposter.platform.PlatformRegistry;
 import com.patbaumgartner.socialcrossposter.platform.ProbeException;
 import com.patbaumgartner.socialcrossposter.platform.ProbeResult;
@@ -16,7 +17,8 @@ import com.patbaumgartner.socialcrossposter.platform.ProbeResult;
  * UC-02 connection/destination operations (ADR-006, ADR-007, ADR-013). Every method takes
  * the explicit workspace id/slug and fails closed on unknown or foreign ids; secrets are
  * encrypted on write, decrypted only for a probe in the owning workspace, and never leave
- * this service in plaintext.
+ * this service in plaintext. A health check emits a redacted UC-12 notification event
+ * only on state transitions (OK&rarr;ERROR, ERROR&rarr;OK); repeated states stay silent.
  */
 @Service
 public class ConnectionService {
@@ -29,12 +31,15 @@ public class ConnectionService {
 
 	private final PlatformRegistry platforms;
 
+	private final NotificationService notifications;
+
 	public ConnectionService(ConnectionRepository connections, AccountRepository accounts, SecretCipher secrets,
-			PlatformRegistry platforms) {
+			PlatformRegistry platforms, NotificationService notifications) {
 		this.connections = connections;
 		this.accounts = accounts;
 		this.secrets = secrets;
 		this.platforms = platforms;
+		this.notifications = notifications;
 	}
 
 	public List<ConnectionView> listConnections(Long workspaceId) {
@@ -120,11 +125,15 @@ public class ConnectionService {
 
 	/**
 	 * Re-probes a connection with its stored secret and updates health (UC-02 step 6).
+	 * Emits a redacted UC-12 event only on a transition: OK&rarr;ERROR records
+	 * CONNECTION_FAILED, ERROR&rarr;OK records CONNECTION_RECOVERED; steady states
+	 * (OK&rarr;OK, ERROR&rarr;ERROR) stay silent to avoid notification noise.
 	 */
 	public void checkHealth(Long workspaceId, String workspaceSlug, Long connectionId) {
 		Connection connection = this.connections.findByIdAndWorkspaceId(connectionId, workspaceId)
 			.orElseThrow(() -> new ProbeException("Unknown connection for this workspace."));
 		OffsetDateTime now = OffsetDateTime.now();
+		String previous = connection.healthState();
 		String state = "OK";
 		try {
 			String credential = this.secrets.open(
@@ -141,6 +150,12 @@ public class ConnectionService {
 		this.connections.save(new Connection(connection.id(), workspaceId, connection.platform(), connection.mode(),
 				connection.providerPrincipal(), connection.label(), connection.secretCipher(), connection.secretNonce(),
 				connection.secretKeyId(), state, now, connection.enabled(), connection.createdAt(), now));
+		if ("ERROR".equals(state) && !"ERROR".equals(previous)) {
+			this.notifications.notifyConnectionFailed(workspaceId, connection);
+		}
+		else if ("OK".equals(state) && "ERROR".equals(previous)) {
+			this.notifications.notifyConnectionRecovered(workspaceId, connection);
+		}
 	}
 
 	public void setConnectionEnabled(Long workspaceId, Long connectionId, boolean enabled) {

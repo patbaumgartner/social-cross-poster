@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.patbaumgartner.socialcrossposter.accounts.Connection;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.scheduling.PublicationSchedule;
 
@@ -17,6 +18,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -48,7 +50,7 @@ class NotificationServiceTest {
 		given(this.events.save(any(NotificationEvent.class))).willAnswer((inv) -> {
 			NotificationEvent e = inv.getArgument(0);
 			return new NotificationEvent(42L, e.workspaceId(), e.eventKey(), e.category(), e.publicationId(),
-					e.deliveryId(), e.scheduleId(), e.summary(), e.createdAt());
+					e.deliveryId(), e.scheduleId(), e.connectionId(), e.summary(), e.createdAt());
 		});
 		given(this.events.findByWorkspaceIdAndEventKey(any(), anyString())).willReturn(Optional.empty());
 	}
@@ -72,7 +74,7 @@ class NotificationServiceTest {
 	@Test
 	void recordDeduplicatesOnExistingKeyAndSavesAndEnqueuesNothing() {
 		NotificationEvent existing = new NotificationEvent(7L, WS, "delivery:5:failed",
-				NotificationService.C_DELIVERY_FAILED, 100L, 5L, null, "original summary", NOW);
+				NotificationService.C_DELIVERY_FAILED, 100L, 5L, null, null, "original summary", NOW);
 		given(this.events.findByWorkspaceIdAndEventKey(WS, "delivery:5:failed")).willReturn(Optional.of(existing));
 
 		NotificationEvent result = this.service.record(WS, "delivery:5:failed", NotificationService.C_DELIVERY_FAILED,
@@ -86,7 +88,7 @@ class NotificationServiceTest {
 	@Test
 	void eventsOfDelegatesToWorkspaceScopedFinder() {
 		NotificationEvent e = new NotificationEvent(9L, WS, "schedule:3:expired",
-				NotificationService.C_SCHEDULE_EXPIRED, null, null, 3L, "expired", NOW);
+				NotificationService.C_SCHEDULE_EXPIRED, null, null, 3L, null, "expired", NOW);
 		given(this.events.findTop50ByWorkspaceIdOrderByIdDesc(WS)).willReturn(List.of(e));
 
 		assertThat(this.service.eventsOf(WS)).containsExactly(e);
@@ -146,6 +148,58 @@ class NotificationServiceTest {
 		assertThat(e.category()).isEqualTo(NotificationService.C_SCHEDULE_NEEDS_REVIEW);
 		verify(this.events).save(any(NotificationEvent.class));
 		verify(this.events, never()).findByWorkspaceIdAndEventKey(eq(999L), anyString());
+	}
+
+	@Test
+	void notifyConnectionFailedSequencesEpisodeKeysPerConnection() {
+		Connection c = connection(7L, "OK");
+		given(this.events.countByWorkspaceIdAndEventKeyStartingWith(WS, "connection:7:failed:")).willReturn(0L, 2L);
+
+		NotificationEvent first = this.service.notifyConnectionFailed(WS, c);
+		NotificationEvent second = this.service.notifyConnectionFailed(WS, c);
+
+		assertThat(first.eventKey()).isEqualTo("connection:7:failed:1");
+		assertThat(second.eventKey()).isEqualTo("connection:7:failed:3");
+		assertThat(first.category()).isEqualTo(NotificationService.C_CONNECTION_FAILED);
+		assertThat(second.category()).isEqualTo(NotificationService.C_CONNECTION_FAILED);
+		verify(this.deliveries, times(2)).enqueueForEvent(any(NotificationEvent.class));
+	}
+
+	@Test
+	void notifyConnectionRecoveredLinksConnectionAndStaysRedacted() {
+		Connection c = connection(7L, "ERROR");
+
+		NotificationEvent e = this.service.notifyConnectionRecovered(WS, c);
+
+		assertThat(e.eventKey()).isEqualTo("connection:7:recovered:1");
+		assertThat(e.category()).isEqualTo(NotificationService.C_CONNECTION_RECOVERED);
+		assertThat(e.connectionId()).isEqualTo(7L);
+		assertThat(e.summary()).contains("telegram")
+			.contains("News bot")
+			.contains("healthy again")
+			.doesNotContain("cipher-value")
+			.doesNotContain("nonce-value");
+		verify(this.deliveries).enqueueForEvent(e);
+	}
+
+	@Test
+	void notifyConnectionFailedWithoutLabelDescribesPlatformOnlyAndNeverLeaksSecrets() {
+		Connection c = new Connection(8L, WS, "telegram", "pasted", "@newsbot", null, "cipher-value", "nonce-value",
+				"key-1", "OK", NOW, true, NOW, NOW);
+
+		NotificationEvent e = this.service.notifyConnectionFailed(WS, c);
+
+		assertThat(e.connectionId()).isEqualTo(8L);
+		assertThat(e.summary()).contains("telegram")
+			.doesNotContain("·")
+			.doesNotContain("cipher-value")
+			.doesNotContain("nonce-value")
+			.doesNotContain("key-1");
+	}
+
+	private static Connection connection(Long id, String health) {
+		return new Connection(id, WS, "telegram", "pasted", "@newsbot", "News bot", "cipher-value", "nonce-value",
+				"key-1", health, NOW, true, NOW, NOW);
 	}
 
 }

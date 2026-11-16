@@ -1,0 +1,141 @@
+package com.patbaumgartner.socialcrossposter.accounts;
+
+import java.time.OffsetDateTime;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import com.patbaumgartner.socialcrossposter.notify.NotificationService;
+import com.patbaumgartner.socialcrossposter.platform.PlatformProbe;
+import com.patbaumgartner.socialcrossposter.platform.PlatformRegistry;
+import com.patbaumgartner.socialcrossposter.platform.ProbeException;
+import com.patbaumgartner.socialcrossposter.platform.ProbeResult;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+/**
+ * Unit tests for {@link ConnectionService#checkHealth} (UC-02 step 6, UC-12
+ * connection/bridge-failure trigger, ADR-013): the re-probe always persists the new
+ * health state, but a redacted notification event is emitted only on a transition —
+ * OK&rarr;ERROR records CONNECTION_FAILED, ERROR&rarr;OK records CONNECTION_RECOVERED,
+ * and steady states stay silent. Unknown/foreign ids fail closed without saving. Mocked
+ * repositories/services, no Spring context.
+ */
+class ConnectionServiceTest {
+
+	private static final Long WS = 1L;
+
+	private static final OffsetDateTime NOW = OffsetDateTime.now();
+
+	private ConnectionRepository connections;
+
+	private AccountRepository accounts;
+
+	private SecretCipher secrets;
+
+	private PlatformRegistry platforms;
+
+	private NotificationService notifications;
+
+	private PlatformProbe probe;
+
+	private ConnectionService service;
+
+	@BeforeEach
+	void setUp() {
+		this.connections = mock(ConnectionRepository.class);
+		this.accounts = mock(AccountRepository.class);
+		this.secrets = mock(SecretCipher.class);
+		this.platforms = mock(PlatformRegistry.class);
+		this.notifications = mock(NotificationService.class);
+		this.probe = mock(PlatformProbe.class);
+		this.service = new ConnectionService(this.connections, this.accounts, this.secrets, this.platforms,
+				this.notifications);
+		given(this.connections.save(any(Connection.class))).willAnswer((inv) -> inv.getArgument(0));
+		given(this.secrets.open(anyString(), any(SecretCipher.SealedSecret.class))).willReturn("token");
+		given(this.platforms.find("telegram")).willReturn(Optional.of(this.probe));
+	}
+
+	@Test
+	void okToErrorSavesErrorAndEmitsConnectionFailed() {
+		Connection c = connection(7L, "OK");
+		given(this.connections.findByIdAndWorkspaceId(7L, WS)).willReturn(Optional.of(c));
+		willThrow(new ProbeException("provider rejected the credential")).given(this.probe).probe("pasted", "token");
+
+		this.service.checkHealth(WS, "private", 7L);
+
+		assertThat(savedHealth()).isEqualTo("ERROR");
+		verify(this.notifications).notifyConnectionFailed(WS, c);
+		verify(this.notifications, never()).notifyConnectionRecovered(any(), any());
+	}
+
+	@Test
+	void errorToErrorSavesErrorWithoutAnyNotification() {
+		Connection c = connection(7L, "ERROR");
+		given(this.connections.findByIdAndWorkspaceId(7L, WS)).willReturn(Optional.of(c));
+		willThrow(new ProbeException("still rejected")).given(this.probe).probe("pasted", "token");
+
+		this.service.checkHealth(WS, "private", 7L);
+
+		assertThat(savedHealth()).isEqualTo("ERROR");
+		verifyNoInteractions(this.notifications);
+	}
+
+	@Test
+	void errorToOkSavesOkAndEmitsConnectionRecovered() {
+		Connection c = connection(7L, "ERROR");
+		given(this.connections.findByIdAndWorkspaceId(7L, WS)).willReturn(Optional.of(c));
+		given(this.probe.probe("pasted", "token")).willReturn(new ProbeResult("@newsbot", "News bot"));
+
+		this.service.checkHealth(WS, "private", 7L);
+
+		assertThat(savedHealth()).isEqualTo("OK");
+		verify(this.notifications).notifyConnectionRecovered(WS, c);
+		verify(this.notifications, never()).notifyConnectionFailed(any(), any());
+	}
+
+	@Test
+	void okToOkSavesOkWithoutAnyNotification() {
+		Connection c = connection(7L, "OK");
+		given(this.connections.findByIdAndWorkspaceId(7L, WS)).willReturn(Optional.of(c));
+		given(this.probe.probe("pasted", "token")).willReturn(new ProbeResult("@newsbot", "News bot"));
+
+		this.service.checkHealth(WS, "private", 7L);
+
+		assertThat(savedHealth()).isEqualTo("OK");
+		verifyNoInteractions(this.notifications);
+	}
+
+	@Test
+	void foreignIdFailsClosedWithoutSaveOrNotification() {
+		given(this.connections.findByIdAndWorkspaceId(99L, WS)).willReturn(Optional.empty());
+
+		assertThatThrownBy(() -> this.service.checkHealth(WS, "private", 99L)).isInstanceOf(ProbeException.class);
+
+		verify(this.connections, never()).save(any());
+		verifyNoInteractions(this.notifications);
+	}
+
+	private String savedHealth() {
+		ArgumentCaptor<Connection> captor = ArgumentCaptor.forClass(Connection.class);
+		verify(this.connections).save(captor.capture());
+		return captor.getValue().healthState();
+	}
+
+	private static Connection connection(Long id, String health) {
+		return new Connection(id, WS, "telegram", "pasted", "@newsbot", "News bot", "cipher", "nonce", "key-1", health,
+				NOW, true, NOW, NOW);
+	}
+
+}
