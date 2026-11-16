@@ -89,7 +89,7 @@ class WebhookSenderTest {
 
 	private NotificationPayload payload() {
 		return new NotificationPayload(42L, "delivery:5:failed", 1L, "Private", "DELIVERY_FAILED",
-				"Delivery #5 to telegram failed; \"quoted\"\nline", 100L, 5L, null, OffsetDateTime.now());
+				"Delivery #5 to telegram failed; \"quoted\"\nline", 100L, 5L, null, null, OffsetDateTime.now());
 	}
 
 	@Test

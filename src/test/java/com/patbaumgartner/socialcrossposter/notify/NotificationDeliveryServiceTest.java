@@ -66,7 +66,8 @@ class NotificationDeliveryServiceTest {
 	}
 
 	private NotificationEvent event(String category) {
-		return new NotificationEvent(42L, WS, "delivery:5:failed", category, 100L, 5L, null, "redacted summary", NOW);
+		return new NotificationEvent(42L, WS, "delivery:5:failed", category, 100L, 5L, null, null, "redacted summary",
+				NOW);
 	}
 
 	private NotificationChannel channel(Long id, String categories) {

@@ -49,7 +49,7 @@ class SmtpSenderTest {
 
 	private static NotificationPayload payload() {
 		return new NotificationPayload(42L, "delivery:5:failed", 1L, "Private", "DELIVERY_FAILED", "redacted summary",
-				100L, 5L, null, OffsetDateTime.now());
+				100L, 5L, null, null, OffsetDateTime.now());
 	}
 
 	@Test
