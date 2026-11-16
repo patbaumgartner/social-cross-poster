@@ -8,8 +8,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import com.patbaumgartner.socialcrossposter.notify.WebhookSender.SendResult;
-import com.patbaumgartner.socialcrossposter.notify.WebhookSender.WebhookPayload;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
 
@@ -24,11 +22,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Tests for {@link NotificationDeliveryService} (UC-12 second slice steps 2 and 4,
- * ADR-013, ADR-015): enqueue deduplicates per (event, channel) and honors the category
+ * Tests for {@link NotificationDeliveryService} (UC-12 second + third slices, steps 2 and
+ * 4, ADR-013, ADR-015): enqueue deduplicates per (event, channel) and honors the category
  * filter; runDue settles rows exactly once — SENT, retryable with backoff, permanent,
- * blocked, and the three-attempt budget — and the payload sent is the redacted event.
- * Mocked repositories/sender, no Spring context.
+ * blocked, and the three-attempt budget — dispatching webhook channels to the webhook
+ * sender and SMTP channels to the SMTP sender, and the payload sent is the redacted
+ * event. Mocked repositories/senders, no Spring context.
  */
 class NotificationDeliveryServiceTest {
 
@@ -48,6 +47,8 @@ class NotificationDeliveryServiceTest {
 
 	private WebhookSender sender;
 
+	private SmtpSender smtpSender;
+
 	private NotificationDeliveryService service;
 
 	@BeforeEach
@@ -58,9 +59,10 @@ class NotificationDeliveryServiceTest {
 		this.workspaces = mock(WorkspaceRepository.class);
 		this.channelService = mock(NotificationChannelService.class);
 		this.sender = mock(WebhookSender.class);
+		this.smtpSender = mock(SmtpSender.class);
 		NotifyProperties props = new NotifyProperties(null, null, null, 3, 60L, 3600L, null, null, List.of());
 		this.service = new NotificationDeliveryService(this.deliveries, this.channels, this.events, this.workspaces,
-				this.channelService, this.sender, props);
+				this.channelService, this.sender, this.smtpSender, props);
 	}
 
 	private NotificationEvent event(String category) {
@@ -69,7 +71,13 @@ class NotificationDeliveryServiceTest {
 
 	private NotificationChannel channel(Long id, String categories) {
 		return new NotificationChannel(id, WS, "ch" + id, "https://1.1.1.1/hook", "cipher", "nonce", "test-v1",
-				categories, true, NOW);
+				categories, true, NOW, NotificationChannel.TYPE_WEBHOOK, null, null, null, null, null, null);
+	}
+
+	private NotificationChannel smtpChannel(Long id) {
+		return new NotificationChannel(id, WS, "smtp" + id, null, "cipher", "nonce", "test-v1", "", true, NOW,
+				NotificationChannel.TYPE_SMTP, "127.0.0.1", 2525, "NONE", "alerts@example.com", "ops@example.com",
+				"relay-user");
 	}
 
 	private NotificationDelivery row(Long id, Long channelId, int attempts) {
@@ -115,7 +123,7 @@ class NotificationDeliveryServiceTest {
 		given(this.workspaces.findById(WS))
 			.willReturn(Optional.of(new Workspace(WS, "private", "Private", "#fff", "Europe/Zurich", NOW)));
 		given(this.channelService.openSecret(anyString(), any())).willReturn("secret");
-		given(this.sender.send(anyString(), anyString(), any(WebhookPayload.class))).willReturn(SendResult.sent());
+		given(this.sender.send(anyString(), anyString(), any(NotificationPayload.class))).willReturn(SendResult.sent());
 
 		this.service.runDue(WS, NOW);
 
@@ -127,7 +135,7 @@ class NotificationDeliveryServiceTest {
 		assertThat(saved.nextAttemptAt()).isNull();
 		assertThat(saved.lastDetail()).contains("2xx");
 		// the payload carries only redacted fields (UC-12 step 3)
-		ArgumentCaptor<WebhookPayload> payload = ArgumentCaptor.forClass(WebhookPayload.class);
+		ArgumentCaptor<NotificationPayload> payload = ArgumentCaptor.forClass(NotificationPayload.class);
 		verify(this.sender).send(anyString(), eq("secret"), payload.capture());
 		assertThat(payload.getValue().eventId()).isEqualTo(42L);
 		assertThat(payload.getValue().workspaceLabel()).isEqualTo("Private");
@@ -144,7 +152,7 @@ class NotificationDeliveryServiceTest {
 		given(this.workspaces.findById(WS))
 			.willReturn(Optional.of(new Workspace(WS, "private", "Private", "#fff", "UTC", NOW)));
 		given(this.channelService.openSecret(anyString(), any())).willReturn("secret");
-		given(this.sender.send(anyString(), anyString(), any(WebhookPayload.class)))
+		given(this.sender.send(anyString(), anyString(), any(NotificationPayload.class)))
 			.willReturn(SendResult.retryable("HTTP 500"));
 
 		this.service.runDue(WS, NOW);
@@ -168,7 +176,7 @@ class NotificationDeliveryServiceTest {
 		given(this.workspaces.findById(WS))
 			.willReturn(Optional.of(new Workspace(WS, "private", "Private", "#fff", "UTC", NOW)));
 		given(this.channelService.openSecret(anyString(), any())).willReturn("secret");
-		given(this.sender.send(anyString(), anyString(), any(WebhookPayload.class)))
+		given(this.sender.send(anyString(), anyString(), any(NotificationPayload.class)))
 			.willReturn(SendResult.retryable("HTTP 500"));
 
 		this.service.runDue(WS, NOW);
@@ -197,7 +205,7 @@ class NotificationDeliveryServiceTest {
 		given(this.workspaces.findById(WS))
 			.willReturn(Optional.of(new Workspace(WS, "private", "Private", "#fff", "UTC", NOW)));
 		given(this.channelService.openSecret(anyString(), any())).willReturn("secret");
-		given(this.sender.send(anyString(), anyString(), any(WebhookPayload.class)))
+		given(this.sender.send(anyString(), anyString(), any(NotificationPayload.class)))
 			.willReturn(SendResult.permanent("HTTP 400"), SendResult.blocked("host denied (SSRF)"));
 
 		this.service.runDue(WS, NOW);
@@ -212,6 +220,32 @@ class NotificationDeliveryServiceTest {
 		});
 		assertThat(saved.get(0).lastDetail()).isEqualTo("HTTP 400");
 		assertThat(saved.get(1).lastDetail()).contains("SSRF");
+	}
+
+	@Test
+	void runDueDispatchesSmtpChannelsToTheSmtpSenderOnly() {
+		NotificationDelivery row = row(7L, 2L, 0);
+		given(this.deliveries.findDue(WS, NOW)).willReturn(List.of(row));
+		given(this.events.findById(42L)).willReturn(Optional.of(event(NotificationService.C_DELIVERY_FAILED)));
+		given(this.channels.findByIdAndWorkspaceId(2L, WS)).willReturn(Optional.of(smtpChannel(2L)));
+		given(this.workspaces.findById(WS))
+			.willReturn(Optional.of(new Workspace(WS, "private", "Private", "#fff", "UTC", NOW)));
+		given(this.channelService.openSecret(anyString(), any())).willReturn("smtp-password");
+		given(this.smtpSender.send(any(NotificationChannel.class), anyString(), any(NotificationPayload.class)))
+			.willReturn(SendResult.sent());
+
+		this.service.runDue(WS, NOW);
+
+		ArgumentCaptor<NotificationPayload> payload = ArgumentCaptor.forClass(NotificationPayload.class);
+		verify(this.smtpSender).send(any(NotificationChannel.class), eq("smtp-password"), payload.capture());
+		assertThat(payload.getValue().eventId()).isEqualTo(42L);
+		assertThat(payload.getValue().category()).isEqualTo("DELIVERY_FAILED");
+		// the webhook sender is never touched for an SMTP channel
+		verify(this.sender, never()).send(anyString(), anyString(), any(NotificationPayload.class));
+		ArgumentCaptor<NotificationDelivery> captor = ArgumentCaptor.forClass(NotificationDelivery.class);
+		verify(this.deliveries).save(captor.capture());
+		assertThat(captor.getValue().state()).isEqualTo(NotificationDeliveryService.S_SENT);
+		assertThat(captor.getValue().attempts()).isEqualTo(1);
 	}
 
 	@Test

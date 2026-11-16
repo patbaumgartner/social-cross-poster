@@ -17,8 +17,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.patbaumgartner.socialcrossposter.notify.WebhookSender.WebhookPayload;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -89,8 +87,8 @@ class WebhookSenderTest {
 		this.server.stop(0);
 	}
 
-	private WebhookPayload payload() {
-		return new WebhookPayload(42L, "delivery:5:failed", 1L, "Private", "DELIVERY_FAILED",
+	private NotificationPayload payload() {
+		return new NotificationPayload(42L, "delivery:5:failed", 1L, "Private", "DELIVERY_FAILED",
 				"Delivery #5 to telegram failed; \"quoted\"\nline", 100L, 5L, null, OffsetDateTime.now());
 	}
 
