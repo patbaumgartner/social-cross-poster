@@ -62,7 +62,9 @@
         meaningful alt text (ADR-016); Telegram cannot transmit alt text on photos, so the alt text
         stays local and that limitation is accepted (ADR-016). Telegram uploads attached images
         directly (<code>sendPhoto</code> / <code>sendMediaGroup</code> album of up to 10, the text as
-        caption up to 1024 chars) — platforms without upload support stay blocked fail-closed. Outgoing
+        caption up to 1024 chars); platforms with a verified source-fetch API instead get short-lived
+        revocable signed import URLs minted per dispatch and revoked once the import is confirmed —
+        platforms with neither stay blocked fail-closed. Outgoing
         uploads are metadata-stripped derivatives (EXIF/GPS/XMP/IPTC/comments removed, ADR-016); the
         private originals keep their metadata and are never sent to a platform.</p>
       <form method="post" enctype="multipart/form-data"

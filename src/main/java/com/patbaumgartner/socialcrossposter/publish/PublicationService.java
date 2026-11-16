@@ -21,6 +21,7 @@ import com.patbaumgartner.socialcrossposter.accounts.ConnectionRepository;
 import com.patbaumgartner.socialcrossposter.accounts.SecretCipher;
 import com.patbaumgartner.socialcrossposter.contacts.MentionResolver;
 import com.patbaumgartner.socialcrossposter.content.DestinationPreview;
+import com.patbaumgartner.socialcrossposter.media.ImportGrantService;
 import com.patbaumgartner.socialcrossposter.media.MediaAsset;
 import com.patbaumgartner.socialcrossposter.media.MediaException;
 import com.patbaumgartner.socialcrossposter.media.MediaService;
@@ -32,8 +33,10 @@ import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverride;
+import com.patbaumgartner.socialcrossposter.platform.ImportSource;
 import com.patbaumgartner.socialcrossposter.platform.MediaAttachment;
 import com.patbaumgartner.socialcrossposter.platform.PlatformPublisher;
+import com.patbaumgartner.socialcrossposter.platform.PublishOutcome;
 import com.patbaumgartner.socialcrossposter.platform.PlatformReconciler;
 import com.patbaumgartner.socialcrossposter.platform.PublishContext;
 import com.patbaumgartner.socialcrossposter.platform.PublishResult;
@@ -134,19 +137,23 @@ public class PublicationService {
 
 	private final MediaService media;
 
+	private final ImportGrantService importGrants;
+
 	/**
 	 * UC-13: fail-closed blocker template (platform name formatted in) when a selected
-	 * destination's platform cannot upload the revision's attached images. Platforms with
-	 * {@link PlatformPublisher#supportsMediaUpload()} (telegram) are not blocked.
+	 * destination's platform can neither upload the revision's attached images directly
+	 * nor import them from a short-lived revocable grant. Platforms with
+	 * {@link PlatformPublisher#supportsMediaUpload()} (telegram) or
+	 * {@link PlatformPublisher#supportsMediaImport()} are not blocked (ADR-008).
 	 */
-	public static final String BLOCKER_MEDIA_PLATFORM = "Attached images cannot be uploaded to platform '%s' yet "
-			+ "(UC-13 later slice) — detach the images or remove that destination.";
+	public static final String BLOCKER_MEDIA_PLATFORM = "Attached images cannot be transferred to platform '%s' yet "
+			+ "(no direct upload and no import support, UC-13) — detach the images or remove that destination.";
 
 	public PublicationService(PostService posts, PreviewService previewService, MentionResolver mentions,
 			AccountRepository accounts, ConnectionRepository connections, SecretCipher secrets,
 			PublisherRegistry publishers, ReconcilerRegistry reconcilers, PublicationRepository publications,
 			DeliveryRepository deliveries, DeliveryAttemptRepository attempts, RevisionMediaRepository revisionMedia,
-			DeliveryMediaRepository deliveryMedia, MediaService media) {
+			DeliveryMediaRepository deliveryMedia, MediaService media, ImportGrantService importGrants) {
 		this.posts = posts;
 		this.previewService = previewService;
 		this.mentions = mentions;
@@ -161,6 +168,7 @@ public class PublicationService {
 		this.revisionMedia = revisionMedia;
 		this.deliveryMedia = deliveryMedia;
 		this.media = media;
+		this.importGrants = importGrants;
 	}
 
 	/**
@@ -264,8 +272,9 @@ public class PublicationService {
 
 	/**
 	 * UC-13: fail-closed blockers for attached images — every selected destination's
-	 * platform must have a wired publisher that supports media upload, otherwise the
-	 * platform name is reported (first slice blocked all media unconditionally).
+	 * platform must have a wired publisher that can either upload media directly or
+	 * import it from a short-lived revocable grant (ADR-008); otherwise the platform name
+	 * is reported (first slice blocked all media unconditionally).
 	 */
 	private List<String> mediaBlockersOf(Long workspaceId, List<RevisionDestination> destinations, Long revisionId) {
 		if (this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(revisionId).isEmpty()) {
@@ -275,7 +284,7 @@ public class PublicationService {
 		for (RevisionDestination rd : destinations) {
 			this.accounts.findByIdAndWorkspaceId(rd.accountId(), workspaceId).ifPresent((acc) -> {
 				Optional<PlatformPublisher> pub = this.publishers.find(acc.platform());
-				if (pub.isEmpty() || !pub.get().supportsMediaUpload()) {
+				if (pub.isEmpty() || (!pub.get().supportsMediaUpload() && !pub.get().supportsMediaImport())) {
 					unsupported.add(acc.platform());
 				}
 			});
@@ -444,17 +453,45 @@ public class PublicationService {
 					"No publisher wired for platform '" + delivery.platform() + "' — review required.", null, now);
 			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
 		}
-		// UC-13: resolve the approved media snapshot back to the private source bytes;
-		// a missing source fails closed without a remote write (ADR-008).
-		List<MediaAttachment> media = mediaAttachmentsOf(workspaceId, delivery);
-		if (media == null) {
-			recordAttempt(workspaceId, delivery.id(), attemptNo, "authorize", "FAILED",
-					"An attached image is no longer available in the private library — review required.", null, now);
-			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+		// UC-13: resolve the approved media snapshot per platform capability (ADR-008):
+		// direct upload sends the private derivative bytes; a source-fetch platform gets
+		// freshly minted short-lived revocable import grants for the exact approved
+		// derivatives. A missing source or an unsupported platform fails closed without a
+		// remote write.
+		PlatformPublisher publisher = publisherOpt.get();
+		List<DeliveryMedia> mediaRows = this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(delivery.id());
+		List<MediaAttachment> media = List.of();
+		List<ImportSource> importSources = List.of();
+		if (!mediaRows.isEmpty()) {
+			if (publisher.supportsMediaUpload()) {
+				media = mediaAttachmentsOf(workspaceId, delivery);
+				if (media == null) {
+					recordAttempt(workspaceId, delivery.id(), attemptNo, "authorize", "FAILED",
+							"An attached image is no longer available in the private library — review required.", null,
+							now);
+					return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+				}
+			}
+			else if (publisher.supportsMediaImport()) {
+				try {
+					importSources = mintImportSources(workspaceId, delivery, mediaRows, now);
+				}
+				catch (MediaException ex) {
+					recordAttempt(workspaceId, delivery.id(), attemptNo, "authorize", "FAILED",
+							"An attached image is no longer available in the private library — review required.", null,
+							now);
+					return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+				}
+			}
+			else {
+				recordAttempt(workspaceId, delivery.id(), attemptNo, "authorize", "FAILED", "Platform '"
+						+ delivery.platform() + "' can neither upload nor import attached images — review required.",
+						null, now);
+				return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+			}
 		}
-		PublishResult result = publisherOpt.get()
-			.publish(new PublishContext(credential, delivery.providerAccountId(), delivery.payloadText(),
-					delivery.publicationId() + ":" + delivery.id(), media));
+		PublishResult result = publisher.publish(new PublishContext(credential, delivery.providerAccountId(),
+				delivery.payloadText(), delivery.publicationId() + ":" + delivery.id(), media, importSources));
 		recordAttempt(workspaceId, delivery.id(), attemptNo, "send", result.outcome().name(), result.detail(),
 				result.externalRef(), now);
 		String state = switch (result.outcome()) {
@@ -462,7 +499,29 @@ public class PublicationService {
 			case FAILED -> D_FAILED;
 			case UNKNOWN -> D_UNKNOWN;
 		};
-		return saveDeliveryState(delivery, state, result.externalRef(), now);
+		Delivery saved = saveDeliveryState(delivery, state, result.externalRef(), now);
+		if (result.outcome() == PublishOutcome.SUCCESS) {
+			// ADR-008 step 5: the provider confirmed the write — retire this delivery's
+			// import grants; the published post references platform-owned media only.
+			this.importGrants.revokeActiveForDelivery(workspaceId, delivery.id(), now);
+		}
+		return saved;
+	}
+
+	/**
+	 * Mints one short-lived revocable import grant per approved attached image, near
+	 * actual dispatch (UC-13 fourth slice, ADR-008 step 3). Minting first revokes the
+	 * delivery's still-active grants, so a retry renews only the same approved bytes.
+	 */
+	private List<ImportSource> mintImportSources(Long workspaceId, Delivery delivery, List<DeliveryMedia> rows,
+			OffsetDateTime now) {
+		List<ImportSource> sources = new ArrayList<>(rows.size());
+		for (DeliveryMedia row : rows) {
+			ImportGrantService.MintedGrant grant = this.importGrants.mint(workspaceId, delivery.id(), row.sha256(),
+					ImportGrantService.PURPOSE_PLATFORM_IMPORT, now);
+			sources.add(new ImportSource(row.sha256(), grant.url(), row.altText()));
+		}
+		return sources;
 	}
 
 	/** Re-derives and persists the ADR-015 aggregate state of a publication. */

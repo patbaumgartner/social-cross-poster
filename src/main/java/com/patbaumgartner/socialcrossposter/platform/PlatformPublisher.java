@@ -26,4 +26,15 @@ public interface PlatformPublisher {
 		return false;
 	}
 
+	/**
+	 * Whether this platform has a verified source-fetch API that can import an image from
+	 * a short-lived revocable signed URL (UC-13 fourth slice, ADR-008 step 3). Defaults
+	 * to {@code false}; dispatch then mints import grants for the approved derivatives. A
+	 * platform with neither upload nor import support keeps media-attached publishing
+	 * blocked fail-closed — permanent public source URLs are never substituted.
+	 */
+	default boolean supportsMediaImport() {
+		return false;
+	}
+
 }

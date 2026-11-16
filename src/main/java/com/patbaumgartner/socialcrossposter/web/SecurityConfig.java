@@ -36,7 +36,12 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http, LoginThrottleFilter loginThrottleFilter,
 			LoginAttemptService loginAttempts) throws Exception {
-		http.authorizeHttpRequests((auth) -> auth.requestMatchers("/login", "/assets/**", "/favicon.ico", "/error")
+		http.authorizeHttpRequests((auth) -> auth
+			// UC-13 fourth slice: the signed import-grant fetch route is the only
+			// permit-all endpoint besides login/assets — the expiring, revocable
+			// signed URL itself is the bearer capability (ADR-008); everything else
+			// stays behind the owner login (ADR-005).
+			.requestMatchers("/login", "/assets/**", "/favicon.ico", "/error", "/media/grants/**")
 			.permitAll()
 			.anyRequest()
 			.authenticated())
