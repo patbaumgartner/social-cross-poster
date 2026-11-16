@@ -109,8 +109,10 @@ public class NotificationController {
 
 	/**
 	 * Sends one test notification to the channel without persisting an event (UC-12 step
-	 * 4 contract; receiver dedup via the event id). Type-aware: webhook channels get a
-	 * signed POST, SMTP channels a mail.
+	 * 4 contract; receiver dedup via the event id). The payload and the dashboard flash
+	 * name the workspace and the exact recipient (postconditions: a test notification
+	 * names the workspace and exact recipient before sending). Type-aware: webhook
+	 * channels get a signed POST, SMTP channels a mail.
 	 */
 	@PostMapping("/w/{slug}/notifications/channels/{id}/test")
 	public String test(@PathVariable String slug, @PathVariable Long id, RedirectAttributes redirect) {
@@ -118,17 +120,21 @@ public class NotificationController {
 			try {
 				NotificationChannel channel = this.channels.requireById(workspace.id(), id);
 				String credential = this.channels.openSecret(workspace.slug(), channel);
-				NotificationPayload payload = new NotificationPayload(0L, "test", workspace.id(), workspace.label(),
-						"TEST", "Test notification from social-cross-poster (workspace " + workspace.label() + ").",
+				String recipient = recipientOf(channel);
+				NotificationPayload payload = new NotificationPayload(
+						0L, "test", workspace.id(), workspace.label(), "TEST", "Test notification from workspace '"
+								+ workspace.label() + "' (" + workspace.slug() + ") to " + recipient + ".",
 						null, null, null, null, OffsetDateTime.now());
 				SendResult result = channel.isSmtp() ? this.smtpSender.send(channel, credential, payload)
 						: this.webhookSender.send(channel.url(), credential, payload);
+				String where = "workspace '" + workspace.label() + "' (" + workspace.slug() + "), channel '"
+						+ channel.label() + "' at " + recipient;
 				if ("SENT".equals(result.outcome())) {
 					redirect.addFlashAttribute("notice",
-							"Test notification delivered to '" + channel.label() + "' (" + result.detail() + ").");
+							"Test notification from " + where + " delivered (" + result.detail() + ").");
 				}
 				else {
-					redirect.addFlashAttribute("error", "Test notification to '" + channel.label() + "' failed: "
+					redirect.addFlashAttribute("error", "Test notification from " + where + " failed: "
 							+ result.outcome() + " — " + result.detail());
 				}
 			}
@@ -137,6 +143,18 @@ public class NotificationController {
 			}
 			return "redirect:/w/" + slug + "/dashboard";
 		});
+	}
+
+	/**
+	 * The exact recipient of a channel: the webhook URL, or for SMTP the
+	 * {@code host:port (tls)} target plus the parsed recipient addresses.
+	 */
+	private static String recipientOf(NotificationChannel channel) {
+		if (channel.isSmtp()) {
+			String recipients = String.join(", ", channel.recipients());
+			return recipients.isEmpty() ? channel.target() : channel.target() + " to " + recipients;
+		}
+		return channel.target();
 	}
 
 	@PostMapping("/w/{slug}/notifications/channels/{id}/delete")
