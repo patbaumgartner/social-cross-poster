@@ -95,3 +95,10 @@ app:
     # http webhooks and unencrypted SMTP (port 25 / TLS NONE) are only accepted
     # for allow-listed hosts.
     allowed-internal-hosts: ${APP_NOTIFY_ALLOWED_INTERNAL_HOSTS:}
+  experimental:
+    # UC-14 / ADR-010: personal WhatsApp Status and Signal are feasibility-gated
+    # experiments, off by default — the core release has no bridge dependency.
+    # When enabled they are listed with a permanent "experimental / unofficial"
+    # label but stay unavailable until a bridge passes the ADR-010 feasibility
+    # probe. WhatsApp Business is permanently excluded and never offered.
+    enabled: ${APP_EXPERIMENTAL_ENABLED:false}

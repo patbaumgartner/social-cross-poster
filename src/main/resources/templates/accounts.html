@@ -19,7 +19,9 @@
         </thead>
         <tbody>
           <tr th:each="c : ${connections}">
-            <td th:text="${c.platform}">telegram</td>
+            <td><span th:text="${c.platform}">telegram</span>
+              <small th:if="${experimentalPlatforms.contains(c.platform)}" th:text="'(' + ${experimentalLabel} + ')'">(experimental / unofficial)</small>
+            </td>
             <td th:text="${c.providerPrincipal}">@bot</td>
             <td th:text="${c.label}">label</td>
             <td th:text="${c.mode}">pasted</td>
@@ -77,6 +79,26 @@
       </form>
     </section>
 
+    <section class="card" th:if="${experimentalEnabled}">
+      <h2>Experimental targets <small th:text="'(' + ${experimentalLabel} + ')'">(experimental / unofficial)</small></h2>
+      <p>Optional, unofficial experiments gated by the ADR-010 feasibility probe. No experiment is a
+        core-release requirement; opt-in does not imply guaranteed delivery, account safety, or official
+        API support. WhatsApp Business is never offered &mdash; no Cloud API, Business onboarding,
+        Business messaging, or Business credentials.</p>
+      <table>
+        <thead>
+          <tr><th>Target</th><th>Label</th><th>Availability</th></tr>
+        </thead>
+        <tbody>
+          <tr th:each="t : ${experimentalTargets}">
+            <td th:text="${t.platform}">signal</td>
+            <td th:text="${experimentalLabel}">experimental / unofficial</td>
+            <td th:text="${t.available} ? 'available — opt in through a locally protected setup path' : ${t.reason}">unavailable</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <section class="card">
       <h2>Destinations</h2>
       <p>Selectable accounts exposed by a connection: two chats/pages are two destinations.</p>
@@ -90,7 +112,9 @@
             <td th:text="${d.kind}">channel</td>
             <td th:text="${d.providerAccountId}">-100123</td>
             <td th:text="${d.host} ?: ''">host</td>
-            <td th:text="${d.platform}">telegram</td>
+            <td><span th:text="${d.platform}">telegram</span>
+              <small th:if="${experimentalPlatforms.contains(d.platform)}" th:text="'(' + ${experimentalLabel} + ')'">(experimental / unofficial)</small>
+            </td>
             <td th:text="${d.enabled} ? 'yes' : 'no'">yes</td>
             <td class="actions">
               <form method="post" th:action="@{/w/{slug}/accounts/destinations/{id}/toggle(slug=${workspace.slug},id=${d.id})}">

@@ -13,6 +13,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.patbaumgartner.socialcrossposter.accounts.AccountDestination;
 import com.patbaumgartner.socialcrossposter.accounts.ConnectionService;
+import com.patbaumgartner.socialcrossposter.platform.ExperimentalPlatforms;
 import com.patbaumgartner.socialcrossposter.platform.PlatformRegistry;
 import com.patbaumgartner.socialcrossposter.platform.ProbeException;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
@@ -22,6 +23,9 @@ import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
  * UC-02: workspace-scoped account management. Every route carries the explicit workspace
  * slug; unknown slugs or foreign connection/destination ids fail closed back to the
  * workspace page. Secrets are accepted on POST only and never rendered back (ADR-007).
+ * UC-14: experimental targets (ADR-010) are listed with their permanent label only when
+ * the opt-in flag is on, and a wired probe for an unproven experimental platform is never
+ * offered in the connect form.
  */
 @Controller
 public class AccountController {
@@ -32,10 +36,14 @@ public class AccountController {
 
 	private final PlatformRegistry platforms;
 
-	public AccountController(WorkspaceService workspaces, ConnectionService connections, PlatformRegistry platforms) {
+	private final ExperimentalPlatforms experimentals;
+
+	public AccountController(WorkspaceService workspaces, ConnectionService connections, PlatformRegistry platforms,
+			ExperimentalPlatforms experimentals) {
 		this.workspaces = workspaces;
 		this.connections = connections;
 		this.platforms = platforms;
+		this.experimentals = experimentals;
 	}
 
 	@GetMapping("/w/{slug}/accounts")
@@ -44,12 +52,23 @@ public class AccountController {
 			model.addAttribute("workspace", workspace);
 			model.addAttribute("connections", this.connections.listConnections(workspace.id()));
 			model.addAttribute("destinations", this.connections.listDestinations(workspace.id()));
-			model.addAttribute("platforms",
-					this.platforms.all()
-						.entrySet()
+			model.addAttribute("platforms", this.platforms.all()
+				.entrySet()
+				.stream()
+				// UC-14 / ADR-010: never offer an experimental platform whose
+				// feasibility probe has not passed.
+				.filter((e) -> !ExperimentalPlatforms.isExperimental(e.getKey())
+						|| this.experimentals.availability(e.getKey()).available())
+				.sorted(Comparator.comparing(Map.Entry::getKey))
+				.map((e) -> Map.entry(e.getKey(), e.getValue().supportedModes().stream().sorted().toList()))
+				.toList());
+			model.addAttribute("experimentalEnabled", this.experimentals.enabled());
+			model.addAttribute("experimentalLabel", ExperimentalPlatforms.LABEL);
+			model.addAttribute("experimentalPlatforms", ExperimentalPlatforms.experimentalKeys());
+			model.addAttribute("experimentalTargets",
+					ExperimentalPlatforms.experimentalKeys()
 						.stream()
-						.sorted(Comparator.comparing(Map.Entry::getKey))
-						.map((e) -> Map.entry(e.getKey(), e.getValue().supportedModes().stream().sorted().toList()))
+						.map((key) -> this.experimentals.availability(key))
 						.toList());
 			return "accounts";
 		}).orElse("redirect:/");

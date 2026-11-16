@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import com.patbaumgartner.socialcrossposter.notify.NotificationService;
+import com.patbaumgartner.socialcrossposter.platform.ExperimentalPlatforms;
 import com.patbaumgartner.socialcrossposter.platform.PlatformRegistry;
 import com.patbaumgartner.socialcrossposter.platform.ProbeException;
 import com.patbaumgartner.socialcrossposter.platform.ProbeResult;
@@ -19,6 +20,9 @@ import com.patbaumgartner.socialcrossposter.platform.ProbeResult;
  * encrypted on write, decrypted only for a probe in the owning workspace, and never leave
  * this service in plaintext. A health check emits a redacted UC-12 notification event
  * only on state transitions (OK&rarr;ERROR, ERROR&rarr;OK); repeated states stay silent.
+ * UC-14: the ADR-010 experimental gate runs before any probe — WhatsApp Business is
+ * permanently rejected and experimental targets (whatsapp-status, signal) only pass when
+ * the opt-in flag is on and a feasibility record exists.
  */
 @Service
 public class ConnectionService {
@@ -33,13 +37,16 @@ public class ConnectionService {
 
 	private final NotificationService notifications;
 
+	private final ExperimentalPlatforms experimentals;
+
 	public ConnectionService(ConnectionRepository connections, AccountRepository accounts, SecretCipher secrets,
-			PlatformRegistry platforms, NotificationService notifications) {
+			PlatformRegistry platforms, NotificationService notifications, ExperimentalPlatforms experimentals) {
 		this.connections = connections;
 		this.accounts = accounts;
 		this.secrets = secrets;
 		this.platforms = platforms;
 		this.notifications = notifications;
+		this.experimentals = experimentals;
 	}
 
 	public List<ConnectionView> listConnections(Long workspaceId) {
@@ -62,6 +69,9 @@ public class ConnectionService {
 	 */
 	public ConnectResult connect(Long workspaceId, String workspaceSlug, String platform, String mode, String label,
 			String credential) {
+		// UC-14 / ADR-010 gate first: excluded platforms and unproven experimental
+		// targets fail closed before any probe runs — no endpoint is ever fabricated.
+		this.experimentals.requireConnectable(platform);
 		var probe = this.platforms.find(platform)
 			.orElseThrow(() -> new ProbeException("Unsupported platform: " + platform));
 		if (!probe.supportedModes().contains(mode)) {
@@ -173,6 +183,10 @@ public class ConnectionService {
 			String host, String label) {
 		Connection connection = this.connections.findByIdAndWorkspaceId(connectionId, workspaceId)
 			.orElseThrow(() -> new ProbeException("Unknown connection for this workspace."));
+		// UC-14 / ADR-010: a destination may only be added while its platform is
+		// connectable — an experimental bridge that lost its feasibility standing
+		// blocks dependent destinations instead of silently substituting (ADR-010).
+		this.experimentals.requireConnectable(connection.platform());
 		if (!StringUtils.hasText(providerAccountId) || !StringUtils.hasText(label)) {
 			throw new ProbeException("Destination requires a provider account id and a label.");
 		}
