@@ -83,6 +83,8 @@ class ExperimentalFlowTest {
 			.andExpect(content().string(containsString("signal")))
 			.andExpect(content().string(containsString("unavailable")))
 			.andExpect(content().string(containsString("feasibility")))
+			.andExpect(content().string(containsString("Candidate kinds")))
+			.andExpect(content().string(containsString("story target is blocked")))
 			.andExpect(content().string(not(containsString("whatsapp-business"))));
 	}
 

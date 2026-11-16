@@ -95,4 +95,40 @@ class ExperimentalPlatformsTest {
 			.hasMessageContaining("feasibility");
 	}
 
+	@Test
+	void verifiedDestinationKindsAreStatusForWhatsappStatusAndMessageOnlyForSignal() {
+		assertThat(ExperimentalPlatforms.destinationKinds("signal")).containsExactly("message");
+		assertThat(ExperimentalPlatforms.destinationKinds("whatsapp-status")).containsExactly("status");
+		assertThat(ExperimentalPlatforms.destinationKinds("telegram")).isEmpty();
+		// story is a separate Signal capability and deliberately not listed
+		assertThat(ExperimentalPlatforms.destinationKinds("signal")).doesNotContain("story");
+	}
+
+	@Test
+	void signalStoryKindIsBlockedWithoutMessageFallback() {
+		assertThatThrownBy(() -> this.enabled.requireVerifiedKind("signal", "story")).isInstanceOf(ProbeException.class)
+			.hasMessageContaining("story")
+			.hasMessageContaining("never sent as a fallback");
+		assertThatCode(() -> this.enabled.requireVerifiedKind("signal", "message")).doesNotThrowAnyException();
+	}
+
+	@Test
+	void unverifiedKindsAreRejectedAndOfficialPlatformsPassThrough() {
+		assertThatThrownBy(() -> this.enabled.requireVerifiedKind("whatsapp-status", "message"))
+			.isInstanceOf(ProbeException.class)
+			.hasMessageContaining("not a verified kind");
+		assertThatCode(() -> this.enabled.requireVerifiedKind("whatsapp-status", "status")).doesNotThrowAnyException();
+		assertThatCode(() -> this.enabled.requireVerifiedKind("telegram", "channel")).doesNotThrowAnyException();
+		assertThatThrownBy(() -> this.enabled.requireVerifiedKind("whatsapp-business", "status"))
+			.isInstanceOf(ProbeException.class)
+			.hasMessageContaining("not supported");
+	}
+
+	@Test
+	void availabilityCarriesCandidateKinds() {
+		assertThat(this.enabled.availability("signal").kinds()).containsExactly("message");
+		assertThat(this.enabled.availability("whatsapp-status").kinds()).containsExactly("status");
+		assertThat(this.enabled.availability("whatsapp-business").kinds()).isEmpty();
+	}
+
 }
