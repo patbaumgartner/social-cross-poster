@@ -20,11 +20,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Tests for {@link NotificationChannelService} (UC-12 second slice step 1, ADR-007,
- * ADR-013): the URL must pass the SSRF guard, labels are workspace-unique, the HMAC
- * secret is stored only sealed and AAD-bound (opening it under another workspace slug
- * fails), categories are normalized, foreign ids fail closed, toggle flips, delete
- * removes outbox rows first.
+ * Tests for {@link NotificationChannelService} (UC-12 second + third slices, step 1,
+ * ADR-007, ADR-013): webhook URLs and SMTP targets must pass their SSRF guards, labels
+ * are workspace-unique, credentials are stored only sealed and AAD-bound (opening them
+ * under another workspace slug or the wrong channel type fails), categories are
+ * normalized, foreign ids fail closed, toggle flips enabled while preserving the SMTP
+ * fields, and delete removes outbox rows first.
  */
 class NotificationChannelServiceTest {
 
@@ -49,11 +50,12 @@ class NotificationChannelServiceTest {
 		SecretCipher cipher = new SecretCipher(
 				new SecretsProperties("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", "test-v1"));
 		this.service = new NotificationChannelService(this.channels, this.deliveries, new OutboundWebhookGuard(props),
-				cipher);
+				new OutboundSmtpGuard(props), cipher);
 		given(this.channels.save(any(NotificationChannel.class))).willAnswer((inv) -> {
 			NotificationChannel c = inv.getArgument(0);
 			return new NotificationChannel(9L, c.workspaceId(), c.label(), c.url(), c.secretCipher(), c.secretNonce(),
-					c.secretKeyId(), c.categories(), c.enabled(), c.createdAt());
+					c.secretKeyId(), c.categories(), c.enabled(), c.createdAt(), c.channelType(), c.smtpHost(),
+					c.smtpPort(), c.smtpTlsMode(), c.smtpFrom(), c.smtpTo(), c.smtpUsername());
 		});
 		given(this.channels.findByWorkspaceIdAndLabel(any(), any())).willReturn(Optional.empty());
 	}
@@ -91,6 +93,7 @@ class NotificationChannelServiceTest {
 
 		assertThat(saved.id()).isEqualTo(9L);
 		assertThat(saved.url()).isEqualTo("http://127.0.0.1:9090/hook");
+		assertThat(saved.channelType()).isEqualTo(NotificationChannel.TYPE_WEBHOOK);
 		assertThat(saved.enabled()).isTrue();
 		// categories normalized to an upper-case csv
 		assertThat(saved.categories()).isEqualTo("DELIVERY_FAILED,SCHEDULE_EXPIRED");
@@ -106,6 +109,103 @@ class NotificationChannelServiceTest {
 		// a different label yields a different secret (AAD includes the label)
 		NotificationChannel other = this.service.create(WS, SLUG, "alerts", "https://1.1.1.1/hook", "");
 		assertThat(this.service.openSecret(SLUG, other)).isNotEqualTo(opened);
+	}
+
+	@Test
+	void createSmtpStoresPasswordSealedWithTheSmtpAadPurpose() {
+		NotificationChannel saved = this.service.createSmtp(WS, SLUG, "mail", "127.0.0.1", "2525", "NONE",
+				"alerts@example.com", "ops@example.com, oncall@example.com", "relay-user", "s3cret!",
+				" delivery_failed ,, ");
+
+		assertThat(saved.id()).isEqualTo(9L);
+		assertThat(saved.channelType()).isEqualTo(NotificationChannel.TYPE_SMTP);
+		assertThat(saved.isSmtp()).isTrue();
+		assertThat(saved.url()).isNull(); // SMTP channels carry no webhook URL
+		assertThat(saved.smtpHost()).isEqualTo("127.0.0.1");
+		assertThat(saved.smtpPort()).isEqualTo(2525);
+		assertThat(saved.smtpTlsMode()).isEqualTo("NONE");
+		assertThat(saved.smtpFrom()).isEqualTo("alerts@example.com");
+		assertThat(saved.smtpTo()).isEqualTo("ops@example.com,oncall@example.com");
+		assertThat(saved.recipients()).containsExactly("ops@example.com", "oncall@example.com");
+		assertThat(saved.smtpUsername()).isEqualTo("relay-user");
+		assertThat(saved.target()).isEqualTo("127.0.0.1:2525 (NONE)");
+		assertThat(saved.categories()).isEqualTo("DELIVERY_FAILED");
+		assertThat(saved.enabled()).isTrue();
+		// the stored credential is sealed ciphertext, never the plaintext password
+		assertThat(saved.secretCipher()).isNotBlank().doesNotContain("s3cret!");
+		assertThat(saved.secretNonce()).isNotBlank();
+		assertThat(this.service.openSecret(SLUG, saved)).isEqualTo("s3cret!");
+		// AAD binding: wrong workspace slug cannot open it
+		assertThatThrownBy(() -> this.service.openSecret("socrates-ch", saved))
+			.isInstanceOf(IllegalStateException.class);
+		// AAD purpose is type-aware: a webhook ciphertext cannot be opened as an SMTP
+		// secret
+		NotificationChannel hook = this.service.create(WS, SLUG, "ops", "http://127.0.0.1:9090/hook", "");
+		NotificationChannel forgedSmtp = new NotificationChannel(saved.id(), WS, "ops", null, hook.secretCipher(),
+				hook.secretNonce(), hook.secretKeyId(), "", true, NOW, NotificationChannel.TYPE_SMTP, "127.0.0.1", 2525,
+				"NONE", "alerts@example.com", "ops@example.com", null);
+		assertThatThrownBy(() -> this.service.openSecret(SLUG, forgedSmtp)).isInstanceOf(IllegalStateException.class);
+	}
+
+	@Test
+	void createSmtpRejectsBadPortTlsMappingAddressesAndGuards() {
+		// canonical port/TLS mapping is enforced by the guard
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "127.0.0.1", "587", "NONE", "a@example.com",
+				"b@example.com", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("587");
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "127.0.0.1", "465", "STARTTLS", "a@example.com",
+				"b@example.com", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("465");
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "127.0.0.1", "abc", "NONE", "a@example.com",
+				"b@example.com", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("port");
+		// unencrypted SMTP off the allow-list is denied even on a public IP literal
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "1.1.1.1", "25", "NONE", "a@example.com",
+				"b@example.com", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("allow-list");
+		// SSRF host rules apply to SMTP exactly as to webhooks
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "10.0.0.5", "587", "STARTTLS", "a@example.com",
+				"b@example.com", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("denied");
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "no-such-host.invalid", "587", "STARTTLS",
+				"a@example.com", "b@example.com", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("resolved");
+		// addresses must be valid, control-character free (header injection)
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "127.0.0.1", "2525", "NONE", "not-an-email",
+				"b@example.com", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("valid email address");
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "127.0.0.1", "2525", "NONE",
+				"a@example.com\r\nBcc: x@y.z", "b@example.com", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("valid email address");
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "127.0.0.1", "2525", "NONE", "a@example.com",
+				"  ", null, null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("to address");
+		// a username requires a password
+		assertThatThrownBy(() -> this.service.createSmtp(WS, SLUG, "m", "127.0.0.1", "2525", "NONE", "a@example.com",
+				"b@example.com", "relay-user", null, ""))
+			.isInstanceOf(NotificationException.class)
+			.hasMessageContaining("password is required");
+		verify(this.channels, never()).save(any());
+	}
+
+	@Test
+	void createSmtpAllowsStarttlsOnAllowListedRelay() {
+		NotificationChannel saved = this.service.createSmtp(WS, SLUG, "relay", "127.0.0.1", "587", "STARTTLS",
+				"alerts@example.com", "ops@example.com", null, null, "");
+		assertThat(saved.smtpPort()).isEqualTo(587);
+		assertThat(saved.smtpTlsMode()).isEqualTo("STARTTLS");
+		assertThat(saved.smtpUsername()).isNull(); // no AUTH configured
+		assertThat(this.service.openSecret(SLUG, saved)).isEmpty(); // empty sealed
+																	// password
 	}
 
 	@Test
@@ -128,6 +228,27 @@ class NotificationChannelServiceTest {
 		assertThat(captor.getValue().enabled()).isFalse();
 		assertThat(captor.getValue().secretCipher()).isEqualTo(channel.secretCipher()); // secret
 																						// untouched
+	}
+
+	@Test
+	void togglePreservesAllSmtpFields() {
+		NotificationChannel smtp = smtpChannel(9L, "mail", true);
+		given(this.channels.findByIdAndWorkspaceId(9L, 5L)).willReturn(Optional.of(smtp));
+
+		NotificationChannel toggled = this.service.toggle(5L, 9L);
+
+		assertThat(toggled.enabled()).isFalse();
+		ArgumentCaptor<NotificationChannel> captor = ArgumentCaptor.forClass(NotificationChannel.class);
+		verify(this.channels).save(captor.capture());
+		NotificationChannel saved = captor.getValue();
+		assertThat(saved.channelType()).isEqualTo(NotificationChannel.TYPE_SMTP);
+		assertThat(saved.smtpHost()).isEqualTo("127.0.0.1");
+		assertThat(saved.smtpPort()).isEqualTo(2525);
+		assertThat(saved.smtpTlsMode()).isEqualTo("NONE");
+		assertThat(saved.smtpFrom()).isEqualTo("alerts@example.com");
+		assertThat(saved.smtpTo()).isEqualTo("ops@example.com");
+		assertThat(saved.smtpUsername()).isEqualTo("relay-user");
+		assertThat(saved.secretCipher()).isEqualTo(smtp.secretCipher());
 	}
 
 	@Test
@@ -158,7 +279,13 @@ class NotificationChannelServiceTest {
 
 	private static NotificationChannel channel(Long id, String label, boolean enabled, String categories) {
 		return new NotificationChannel(id, WS, label, "https://1.1.1.1/hook", "cipher-" + id, "nonce", "test-v1",
-				categories, enabled, NOW);
+				categories, enabled, NOW, NotificationChannel.TYPE_WEBHOOK, null, null, null, null, null, null);
+	}
+
+	private static NotificationChannel smtpChannel(Long id, String label, boolean enabled) {
+		return new NotificationChannel(id, WS, label, null, "cipher-" + id, "nonce", "test-v1", "", enabled, NOW,
+				NotificationChannel.TYPE_SMTP, "127.0.0.1", 2525, "NONE", "alerts@example.com", "ops@example.com",
+				"relay-user");
 	}
 
 	private static NotificationDelivery delivery(Long id, Long channelId, boolean sent) {

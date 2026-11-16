@@ -11,18 +11,19 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import com.patbaumgartner.socialcrossposter.notify.NotificationChannel;
 import com.patbaumgartner.socialcrossposter.notify.NotificationChannelService;
 import com.patbaumgartner.socialcrossposter.notify.NotificationException;
+import com.patbaumgartner.socialcrossposter.notify.NotificationPayload;
+import com.patbaumgartner.socialcrossposter.notify.SendResult;
+import com.patbaumgartner.socialcrossposter.notify.SmtpSender;
 import com.patbaumgartner.socialcrossposter.notify.WebhookSender;
-import com.patbaumgartner.socialcrossposter.notify.WebhookSender.SendResult;
-import com.patbaumgartner.socialcrossposter.notify.WebhookSender.WebhookPayload;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
 /**
- * Webhook notification channel endpoints (UC-12 second slice step 1, ADR-004, ADR-007,
- * ADR-013): add a channel (SSRF-validated URL, server-generated sealed HMAC secret),
- * toggle, send a signed test notification, and delete. All routes are workspace-scoped
- * and fail closed for foreign ids; errors are sanitized and never leak another
- * workspace's data.
+ * External notification channel endpoints (UC-12 second + third slices, step 1, ADR-004,
+ * ADR-007, ADR-013): add a webhook channel (SSRF-validated URL, server-generated sealed
+ * HMAC secret) or an SMTP channel (SSRF-validated host/port/TLS, sealed password),
+ * toggle, send a test notification, and delete. All routes are workspace-scoped and fail
+ * closed for foreign ids; errors are sanitized and never leak another workspace's data.
  */
 @Controller
 public class NotificationController {
@@ -31,13 +32,16 @@ public class NotificationController {
 
 	private final NotificationChannelService channels;
 
-	private final WebhookSender sender;
+	private final WebhookSender webhookSender;
+
+	private final SmtpSender smtpSender;
 
 	public NotificationController(WorkspaceService workspaces, NotificationChannelService channels,
-			WebhookSender sender) {
+			WebhookSender webhookSender, SmtpSender smtpSender) {
 		this.workspaces = workspaces;
 		this.channels = channels;
-		this.sender = sender;
+		this.webhookSender = webhookSender;
+		this.smtpSender = smtpSender;
 	}
 
 	/**
@@ -64,6 +68,30 @@ public class NotificationController {
 		});
 	}
 
+	/**
+	 * Adds an SMTP channel. Host/port/TLS must pass the SSRF guard with the canonical
+	 * mapping (25=NONE allow-listed only, 465=IMPLICIT_TLS, 587=STARTTLS); the password
+	 * is stored only sealed (ADR-007) and never shown again.
+	 */
+	@PostMapping("/w/{slug}/notifications/smtp-channels")
+	public String createSmtp(@PathVariable String slug, @RequestParam String label, @RequestParam String host,
+			@RequestParam String port, @RequestParam String tlsMode, @RequestParam String from, @RequestParam String to,
+			@RequestParam(required = false) String username, @RequestParam(required = false) String password,
+			@RequestParam(required = false) String categories, RedirectAttributes redirect) {
+		return withWorkspace(slug, (workspace) -> {
+			try {
+				NotificationChannel channel = this.channels.createSmtp(workspace.id(), workspace.slug(), label, host,
+						port, tlsMode, from, to, username, password, categories);
+				redirect.addFlashAttribute("notice", "SMTP channel '" + channel.label() + "' added (" + channel.target()
+						+ "). The password was stored encrypted (ADR-007) and is never shown again.");
+			}
+			catch (NotificationException ex) {
+				redirect.addFlashAttribute("error", ex.getMessage());
+			}
+			return "redirect:/w/" + slug + "/dashboard";
+		});
+	}
+
 	@PostMapping("/w/{slug}/notifications/channels/{id}/toggle")
 	public String toggle(@PathVariable String slug, @PathVariable Long id, RedirectAttributes redirect) {
 		return withWorkspace(slug, (workspace) -> {
@@ -80,19 +108,21 @@ public class NotificationController {
 	}
 
 	/**
-	 * Sends one signed test notification to the channel without persisting an event
-	 * (UC-12 step 4 signature/timestamp contract, receiver dedup via X-SCP-Event-Id).
+	 * Sends one test notification to the channel without persisting an event (UC-12 step
+	 * 4 contract; receiver dedup via the event id). Type-aware: webhook channels get a
+	 * signed POST, SMTP channels a mail.
 	 */
 	@PostMapping("/w/{slug}/notifications/channels/{id}/test")
 	public String test(@PathVariable String slug, @PathVariable Long id, RedirectAttributes redirect) {
 		return withWorkspace(slug, (workspace) -> {
 			try {
 				NotificationChannel channel = this.channels.requireById(workspace.id(), id);
-				String secret = this.channels.openSecret(workspace.slug(), channel);
-				WebhookPayload payload = new WebhookPayload(0L, "test", workspace.id(), workspace.label(), "TEST",
-						"Test notification from social-cross-poster (workspace " + workspace.label() + ").", null, null,
-						null, OffsetDateTime.now());
-				SendResult result = this.sender.send(channel.url(), secret, payload);
+				String credential = this.channels.openSecret(workspace.slug(), channel);
+				NotificationPayload payload = new NotificationPayload(0L, "test", workspace.id(), workspace.label(),
+						"TEST", "Test notification from social-cross-poster (workspace " + workspace.label() + ").",
+						null, null, null, OffsetDateTime.now());
+				SendResult result = channel.isSmtp() ? this.smtpSender.send(channel, credential, payload)
+						: this.webhookSender.send(channel.url(), credential, payload);
 				if ("SENT".equals(result.outcome())) {
 					redirect.addFlashAttribute("notice",
 							"Test notification delivered to '" + channel.label() + "' (" + result.detail() + ").");

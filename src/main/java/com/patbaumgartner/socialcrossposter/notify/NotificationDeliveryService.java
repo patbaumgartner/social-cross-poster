@@ -8,19 +8,18 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.patbaumgartner.socialcrossposter.notify.WebhookSender.SendResult;
-import com.patbaumgartner.socialcrossposter.notify.WebhookSender.WebhookPayload;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
 
 /**
- * Notification outbox (UC-12 second slice steps 2 and 4, ADR-013, ADR-015). New events
- * enqueue one deduplicated delivery row per enabled, category-interested channel (the
- * {@code (event_id, channel_id)} unique constraint is the backstop). {@link #runDue}
- * sends due rows with bounded backoff — {@code base * 2^(n-1)} x jitter [0.8, 1.2),
- * capped after jitter — and at most {@code maxAttempts} (3) total attempts. SENT/terminal
- * rows keep a redacted detail only; failures never create new events, so delivery cannot
- * recurse (UC-12 alternative flow 3).
+ * Notification outbox (UC-12 second + third slices, steps 2 and 4, ADR-013, ADR-015). New
+ * events enqueue one deduplicated delivery row per enabled, category-interested channel
+ * (webhook or SMTP — the {@code (event_id, channel_id)} unique constraint is the
+ * backstop). {@link #runDue} sends due rows with bounded backoff — {@code base * 2^(n-1)}
+ * x jitter [0.8, 1.2), capped after jitter — and at most {@code maxAttempts} (3) total
+ * attempts. The send dispatches on the channel type: webhook channels get a signed POST,
+ * SMTP channels a mail. SENT/terminal rows keep a redacted detail only; failures never
+ * create new events, so delivery cannot recurse (UC-12 alternative flow 3).
  */
 @Service
 public class NotificationDeliveryService {
@@ -41,7 +40,9 @@ public class NotificationDeliveryService {
 
 	private final NotificationChannelService channelService;
 
-	private final WebhookSender sender;
+	private final WebhookSender webhookSender;
+
+	private final SmtpSender smtpSender;
 
 	private final NotifyProperties props;
 
@@ -49,13 +50,15 @@ public class NotificationDeliveryService {
 
 	public NotificationDeliveryService(NotificationDeliveryRepository deliveries,
 			NotificationChannelRepository channels, NotificationEventRepository events, WorkspaceRepository workspaces,
-			NotificationChannelService channelService, WebhookSender sender, NotifyProperties props) {
+			NotificationChannelService channelService, WebhookSender webhookSender, SmtpSender smtpSender,
+			NotifyProperties props) {
 		this.deliveries = deliveries;
 		this.channels = channels;
 		this.events = events;
 		this.workspaces = workspaces;
 		this.channelService = channelService;
-		this.sender = sender;
+		this.webhookSender = webhookSender;
+		this.smtpSender = smtpSender;
 		this.props = props;
 	}
 
@@ -111,11 +114,13 @@ public class NotificationDeliveryService {
 			.orElseThrow(() -> new NotificationException("Unknown notification channel."));
 		Workspace workspace = this.workspaces.findById(workspaceId)
 			.orElseThrow(() -> new NotificationException("Unknown workspace."));
-		String secret = this.channelService.openSecret(workspace.slug(), channel);
-		WebhookPayload payload = new WebhookPayload(event.id(), event.eventKey(), workspace.id(), workspace.label(),
-				event.category(), event.summary(), event.publicationId(), event.deliveryId(), event.scheduleId(),
-				event.createdAt());
-		SendResult result = this.sender.send(channel.url(), secret, payload);
+		// type-aware sealed credential: HMAC secret for webhooks, SMTP password for SMTP
+		String credential = this.channelService.openSecret(workspace.slug(), channel);
+		NotificationPayload payload = new NotificationPayload(event.id(), event.eventKey(), workspace.id(),
+				workspace.label(), event.category(), event.summary(), event.publicationId(), event.deliveryId(),
+				event.scheduleId(), event.createdAt());
+		SendResult result = channel.isSmtp() ? this.smtpSender.send(channel, credential, payload)
+				: this.webhookSender.send(channel.url(), credential, payload);
 		int attempts = row.attempts() + 1;
 		String state;
 		String detail = result.detail();

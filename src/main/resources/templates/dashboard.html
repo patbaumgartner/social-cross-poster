@@ -16,9 +16,9 @@
 
     <section class="card">
       <h2>Notifications (UC-12)</h2>
-      <p>In-app events are authoritative and always shown here; webhook channels deliver them
-        externally with a signed payload and bounded retries. Summaries are redacted — no draft
-        text, tokens or raw provider bodies.</p>
+      <p>In-app events are authoritative and always shown here; webhook and SMTP channels deliver
+        them externally with bounded retries (webhooks carry a signed payload). Summaries are
+        redacted — no draft text, tokens or raw provider bodies.</p>
       <p th:if="${events.isEmpty()}"><em>No events yet.</em></p>
       <ul th:if="${!events.isEmpty()}">
         <li th:each="e : ${events}">
@@ -40,13 +40,41 @@
         <label>URL <input type="url" name="url" size="48" placeholder="https://example.com/hook" required/></label>
         <label>Categories (csv, empty = all) <input type="text" name="categories" size="32"
               placeholder="CATEGORY_A, CATEGORY_B"/></label>
-        <button type="submit">Add channel</button>
+        <button type="submit">Add webhook channel</button>
       </form>
-      <p th:if="${channels.isEmpty()}"><em>No webhook channels yet.</em></p>
+
+      <h3>SMTP channels</h3>
+      <p>SMTP targets pass the same SSRF guard as webhook URLs (DNS re-resolved at send time;
+        private/loopback/link-local/metadata targets denied). Canonical port/TLS mapping:
+        25 = NONE (deployment allow-list only), 465 = IMPLICIT_TLS, 587 = STARTTLS. The
+        password is stored encrypted (ADR-007) and never shown again.</p>
+      <form th:action="@{/w/{slug}/notifications/smtp-channels(slug=${workspace.slug})}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+        <label>Label <input type="text" name="label" maxlength="80" required/></label>
+        <label>Host <input type="text" name="host" size="24" placeholder="mail.example.com" required/></label>
+        <label>Port <input type="number" name="port" min="1" max="65535" placeholder="587" required/></label>
+        <label>TLS
+          <select name="tlsMode">
+            <option value="STARTTLS" selected>STARTTLS (587)</option>
+            <option value="IMPLICIT_TLS">IMPLICIT_TLS (465)</option>
+            <option value="NONE">NONE (25, allow-listed only)</option>
+          </select>
+        </label>
+        <label>From <input type="text" name="from" size="28" placeholder="alerts@example.com" required/></label>
+        <label>To (csv) <input type="text" name="to" size="32" placeholder="ops@example.com, oncall@example.com" required/></label>
+        <label>Username (optional) <input type="text" name="username" size="20" autocomplete="off"/></label>
+        <label>Password (optional) <input type="password" name="password" size="20" autocomplete="new-password"/></label>
+        <label>Categories (csv, empty = all) <input type="text" name="categories" size="32"
+              placeholder="CATEGORY_A, CATEGORY_B"/></label>
+        <button type="submit">Add SMTP channel</button>
+      </form>
+
+      <p th:if="${channels.isEmpty()}"><em>No external channels yet.</em></p>
       <ul th:if="${!channels.isEmpty()}">
         <li th:each="c : ${channels}">
           <strong th:text="${c.label}">ops</strong>
-          · <code th:text="${c.url}">https://…</code>
+          · <span class="badge" th:text="${c.channelType}">WEBHOOK</span>
+          · <code th:text="${c.target()}">https://…</code>
           · <span class="badge" th:text="${c.enabled} ? 'ENABLED' : 'DISABLED'">ENABLED</span>
           <span th:if="${!c.categorySet().isEmpty()}">· categories: <span th:text="${c.categories}">…</span></span>
           <form th:action="@{/w/{slug}/notifications/channels/{id}/toggle(slug=${workspace.slug},id=${c.id})}"
