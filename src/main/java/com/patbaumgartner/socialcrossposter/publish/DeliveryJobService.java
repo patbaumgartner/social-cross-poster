@@ -223,6 +223,10 @@ public class DeliveryJobService {
 		}
 		if (unknownBefore && PublicationService.D_UNKNOWN.equals(delivery.state())) {
 			this.notifications.notifyDeliveryUnknown(workspaceId, delivery);
+			// UC-12 alternative flow 6: an UNKNOWN-stuck outcome is the outage class
+			// (provider 5xx/transport) — also record the rate-limited per-platform
+			// summary
+			this.notifications.notifyProviderOutage(workspaceId, delivery, now);
 		}
 		this.publications.refreshAggregate(workspaceId, delivery.publicationId());
 		return this.publications.requireDelivery(workspaceId, delivery.id());

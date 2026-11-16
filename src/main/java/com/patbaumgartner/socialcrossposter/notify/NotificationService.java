@@ -1,6 +1,8 @@
 package com.patbaumgartner.socialcrossposter.notify;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -38,6 +40,12 @@ public class NotificationService {
 	public static final String C_CONNECTION_FAILED = "CONNECTION_FAILED";
 
 	public static final String C_CONNECTION_RECOVERED = "CONNECTION_RECOVERED";
+
+	public static final String C_PROVIDER_OUTAGE = "PROVIDER_OUTAGE";
+
+	/** UTC hour bucket for rate-limited outage summaries, e.g. {@code 2026-11-16T17Z}. */
+	private static final DateTimeFormatter OUTAGE_HOUR_BUCKET = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH'Z'")
+		.withZone(ZoneOffset.UTC);
 
 	private final NotificationEventRepository events;
 
@@ -161,6 +169,27 @@ public class NotificationService {
 		return record(workspaceId, "connection:" + connection.id() + ":recovered:" + episode, C_CONNECTION_RECOVERED,
 				null, null, null, connection.id(), "Connection #" + connection.id() + " (" + describe(connection)
 						+ ") is healthy again after a failed health check.");
+	}
+
+	/**
+	 * A delivery stayed UNKNOWN after reconciliation — the outage class: the provider
+	 * answered 5xx or could not be reached, so other deliveries to the same platform are
+	 * likely affected too (UC-12 alternative flow 6). Records one redacted, rate-limited
+	 * summary per workspace, platform and UTC hour: the key
+	 * {@code outage:<platform>:<hour>} lets the {@code (workspace_id, event_key)} unique
+	 * constraint allow at most one summary per bucket while every workspace keeps its own
+	 * visibility. Confirmed 4xx rejections (FAILED) are not outages and stay
+	 * per-delivery. The summary carries only the platform, the hour window and the
+	 * first-seen delivery id — never payload text or provider bodies (alternative flow
+	 * 4).
+	 */
+	public NotificationEvent notifyProviderOutage(Long workspaceId, Delivery delivery, OffsetDateTime now) {
+		String bucket = OUTAGE_HOUR_BUCKET.format(now.toInstant());
+		return record(workspaceId, "outage:" + delivery.platform() + ":" + bucket, C_PROVIDER_OUTAGE,
+				delivery.publicationId(), delivery.id(), null,
+				"Possible shared outage on " + delivery.platform() + " in hour " + bucket
+						+ " UTC (rate-limited to one event per platform per hour); first seen on delivery #"
+						+ delivery.id() + ".");
 	}
 
 	/**

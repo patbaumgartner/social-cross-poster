@@ -197,6 +197,69 @@ class NotificationServiceTest {
 			.doesNotContain("key-1");
 	}
 
+	@Test
+	void notifyProviderOutageIsHourBucketedLinkedAndRedacted() {
+		OffsetDateTime at = OffsetDateTime.parse("2026-11-16T17:23:41Z");
+		Delivery delivery = new Delivery(5L, WS, 100L, 7L, "telegram", "News channel", null, "-100123",
+				"secret draft text", "hash", "UNKNOWN", null, NOW, NOW);
+
+		NotificationEvent e = this.service.notifyProviderOutage(WS, delivery, at);
+
+		assertThat(e.eventKey()).isEqualTo("outage:telegram:2026-11-16T17Z");
+		assertThat(e.category()).isEqualTo(NotificationService.C_PROVIDER_OUTAGE);
+		assertThat(e.publicationId()).isEqualTo(100L);
+		assertThat(e.deliveryId()).isEqualTo(5L);
+		assertThat(e.scheduleId()).isNull();
+		assertThat(e.connectionId()).isNull();
+		// redaction (UC-12 alternative flow 4): platform + hour window + first-seen
+		// delivery only — never the payload text or the destination label
+		assertThat(e.summary()).contains("telegram")
+			.contains("2026-11-16T17Z")
+			.contains("delivery #5")
+			.doesNotContain("secret draft text")
+			.doesNotContain("News channel");
+		verify(this.deliveries).enqueueForEvent(e);
+	}
+
+	@Test
+	void notifyProviderOutageSameHourDeduplicatesOnTheBucketKey() {
+		OffsetDateTime at = OffsetDateTime.parse("2026-11-16T17:59:59Z");
+		Delivery first = delivery(5L);
+		Delivery second = delivery(6L);
+		NotificationEvent existing = new NotificationEvent(7L, WS, "outage:telegram:2026-11-16T17Z",
+				NotificationService.C_PROVIDER_OUTAGE, 100L, 5L, null, null, "original outage summary", NOW);
+		given(this.events.findByWorkspaceIdAndEventKey(WS, "outage:telegram:2026-11-16T17Z"))
+			.willReturn(Optional.empty(), Optional.of(existing));
+
+		NotificationEvent e1 = this.service.notifyProviderOutage(WS, first, at);
+		NotificationEvent e2 = this.service.notifyProviderOutage(WS, second, at);
+
+		assertThat(e1.eventKey()).isEqualTo("outage:telegram:2026-11-16T17Z");
+		assertThat(e2).isSameAs(existing);
+		verify(this.events, times(1)).save(any(NotificationEvent.class));
+		verify(this.deliveries, times(1)).enqueueForEvent(any(NotificationEvent.class));
+	}
+
+	@Test
+	void notifyProviderOutageNewHourGetsAFreshSummaryKey() {
+		Delivery delivery = delivery(5L);
+
+		NotificationEvent e17 = this.service.notifyProviderOutage(WS, delivery,
+				OffsetDateTime.parse("2026-11-16T17:05:00Z"));
+		NotificationEvent e18 = this.service.notifyProviderOutage(WS, delivery,
+				OffsetDateTime.parse("2026-11-16T18:05:00Z"));
+
+		assertThat(e17.eventKey()).isEqualTo("outage:telegram:2026-11-16T17Z");
+		assertThat(e18.eventKey()).isEqualTo("outage:telegram:2026-11-16T18Z");
+		verify(this.events, times(2)).save(any(NotificationEvent.class));
+		verify(this.deliveries, times(2)).enqueueForEvent(any(NotificationEvent.class));
+	}
+
+	private static Delivery delivery(Long id) {
+		return new Delivery(id, WS, 100L, 7L, "telegram", "News channel", null, "-100123", "secret draft text", "hash",
+				"UNKNOWN", null, NOW, NOW);
+	}
+
 	private static Connection connection(Long id, String health) {
 		return new Connection(id, WS, "telegram", "pasted", "@newsbot", "News bot", "cipher-value", "nonce-value",
 				"key-1", health, NOW, true, NOW, NOW);

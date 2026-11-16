@@ -39,7 +39,11 @@ class SecretCipherTest {
 	@Test
 	void tamperedCiphertextFails() {
 		var sealed = this.cipher.seal("aad", "secret-token");
-		var tampered = new SecretCipher.SealedSecret("A" + sealed.ciphertext().substring(1), sealed.nonce(),
+		// Flip the first base64 char to a different one so the ciphertext really changes;
+		// a random first char can already be 'A', which would leave the value untampered.
+		char original = sealed.ciphertext().charAt(0);
+		char replacement = original == 'A' ? 'B' : 'A';
+		var tampered = new SecretCipher.SealedSecret(replacement + sealed.ciphertext().substring(1), sealed.nonce(),
 				sealed.keyId());
 		assertThatThrownBy(() -> this.cipher.open("aad", tampered)).isInstanceOf(IllegalStateException.class);
 	}
