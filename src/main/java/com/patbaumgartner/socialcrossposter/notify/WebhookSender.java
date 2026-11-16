@@ -1,12 +1,12 @@
 package com.patbaumgartner.socialcrossposter.notify;
 
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+
+import java.nio.charset.StandardCharsets;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -16,11 +16,10 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * Sends one signed webhook POST (UC-12 second slice, step 4). The JSON payload carries
- * only redacted fields — event id/key, workspace id/label, category, redacted summary,
- * the optional publication/delivery/schedule ids and the occurrence time (UC-12 step 3);
- * never draft text, tokens, media or raw provider bodies. Headers: {@code X-SCP-Event-Id}
- * (stable id for receiver dedup), {@code X-SCP-Timestamp} and
+ * Sends one signed webhook POST (UC-12 second slice, step 4). The JSON body is the shared
+ * redacted {@link NotificationPayload} (UC-12 step 3); never draft text, tokens, media or
+ * raw provider bodies. Headers: {@code X-SCP-Event-Id} (stable id for receiver dedup),
+ * {@code X-SCP-Timestamp} and
  * {@code X-SCP-Signature: t=<ts>,v1=<hex HMAC-SHA256(secret, ts + "." + body)>}.
  *
  * The target is re-validated by the SSRF guard immediately before the request (DNS
@@ -30,33 +29,6 @@ import org.springframework.web.client.RestClientResponseException;
  */
 @Component
 public class WebhookSender {
-
-	/** The redacted webhook payload (UC-12 step 3). */
-	public record WebhookPayload(Long eventId, String eventKey, Long workspaceId, String workspaceLabel,
-			String category, String summary, Long publicationId, Long deliveryId, Long scheduleId,
-			OffsetDateTime occurredAt) {
-	}
-
-	/** Outcome of one send attempt. */
-	public record SendResult(String outcome, String detail) {
-
-		public static SendResult sent() {
-			return new SendResult("SENT", "delivered (HTTP 2xx)");
-		}
-
-		public static SendResult permanent(String detail) {
-			return new SendResult("FAILED_PERMANENT", detail);
-		}
-
-		public static SendResult retryable(String detail) {
-			return new SendResult("FAILED_RETRYABLE", detail);
-		}
-
-		public static SendResult blocked(String detail) {
-			return new SendResult("BLOCKED", detail);
-		}
-
-	}
 
 	private final OutboundWebhookGuard guard;
 
@@ -74,7 +46,7 @@ public class WebhookSender {
 	 * POSTs the signed payload to {@code url}. Never throws for expected failure modes —
 	 * the result carries a redacted detail (status class or guard reason, never a body).
 	 */
-	public SendResult send(String url, String secret, WebhookPayload payload) {
+	public SendResult send(String url, String secret, NotificationPayload payload) {
 		try {
 			this.guard.validate(url); // re-resolve DNS at send time (arc42 section 8)
 		}
@@ -82,7 +54,7 @@ public class WebhookSender {
 			return SendResult.blocked(ex.getMessage());
 		}
 		long timestamp = Instant.now().getEpochSecond();
-		String body = toJson(payload);
+		String body = payload.toJson();
 		String signature = "t=" + timestamp + ",v1=" + hmacSha256Hex(secret, timestamp + "." + body);
 		try {
 			var response = this.restClient.post()
@@ -117,60 +89,6 @@ public class WebhookSender {
 		catch (ResourceAccessException ex) {
 			return SendResult.retryable("transport error");
 		}
-	}
-
-	static String toJson(WebhookPayload p) {
-		StringBuilder json = new StringBuilder(256);
-		json.append('{');
-		field(json, "eventId", p.eventId()).append(',');
-		field(json, "eventKey", p.eventKey()).append(',');
-		field(json, "workspaceId", p.workspaceId()).append(',');
-		field(json, "workspaceLabel", p.workspaceLabel()).append(',');
-		field(json, "category", p.category()).append(',');
-		field(json, "summary", p.summary()).append(',');
-		field(json, "publicationId", p.publicationId()).append(',');
-		field(json, "deliveryId", p.deliveryId()).append(',');
-		field(json, "scheduleId", p.scheduleId()).append(',');
-		field(json, "occurredAt", p.occurredAt() == null ? null : p.occurredAt().toString());
-		json.append('}');
-		return json.toString();
-	}
-
-	private static StringBuilder field(StringBuilder json, String name, Object value) {
-		json.append('"').append(name).append("\":");
-		if (value == null) {
-			json.append("null");
-		}
-		else if (value instanceof Number) {
-			json.append(value);
-		}
-		else {
-			json.append('"').append(escape(String.valueOf(value))).append('"');
-		}
-		return json;
-	}
-
-	private static String escape(String s) {
-		StringBuilder out = new StringBuilder(s.length() + 8);
-		for (int i = 0; i < s.length(); i++) {
-			char c = s.charAt(i);
-			switch (c) {
-				case '"' -> out.append("\\\"");
-				case '\\' -> out.append("\\\\");
-				case '\n' -> out.append("\\n");
-				case '\r' -> out.append("\\r");
-				case '\t' -> out.append("\\t");
-				default -> {
-					if (c < 0x20) {
-						out.append(String.format("\\u%04x", (int) c));
-					}
-					else {
-						out.append(c);
-					}
-				}
-			}
-		}
-		return out.toString();
 	}
 
 	private static String hmacSha256Hex(String secret, String message) {
