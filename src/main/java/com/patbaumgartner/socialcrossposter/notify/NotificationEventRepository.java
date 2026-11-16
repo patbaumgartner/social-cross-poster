@@ -16,4 +16,10 @@ public interface NotificationEventRepository extends CrudRepository<Notification
 
 	List<NotificationEvent> findTop50ByWorkspaceIdOrderByIdDesc(Long workspaceId);
 
+	/**
+	 * Counts events whose key starts with the prefix — used to sequence connection-health
+	 * episodes.
+	 */
+	long countByWorkspaceIdAndEventKeyStartingWith(Long workspaceId, String eventKeyPrefix);
+
 }

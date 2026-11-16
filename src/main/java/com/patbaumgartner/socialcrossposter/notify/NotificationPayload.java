@@ -5,11 +5,11 @@ import java.time.OffsetDateTime;
 /**
  * The redacted notification payload (UC-12 step 3), shared by the webhook JSON body and
  * the SMTP mail body: event id/key, workspace id/label, category, redacted summary, the
- * optional publication/delivery/schedule ids and the occurrence time — never draft text,
- * tokens, media or raw provider bodies.
+ * optional publication/delivery/schedule/connection ids and the occurrence time — never
+ * draft text, tokens, media or raw provider bodies.
  */
 public record NotificationPayload(Long eventId, String eventKey, Long workspaceId, String workspaceLabel,
-		String category, String summary, Long publicationId, Long deliveryId, Long scheduleId,
+		String category, String summary, Long publicationId, Long deliveryId, Long scheduleId, Long connectionId,
 		OffsetDateTime occurredAt) {
 
 	/** Serializes the payload to compact JSON with proper escaping. */
@@ -25,6 +25,7 @@ public record NotificationPayload(Long eventId, String eventKey, Long workspaceI
 		field(json, "publicationId", this.publicationId).append(',');
 		field(json, "deliveryId", this.deliveryId).append(',');
 		field(json, "scheduleId", this.scheduleId).append(',');
+		field(json, "connectionId", this.connectionId).append(',');
 		field(json, "occurredAt", this.occurredAt == null ? null : this.occurredAt.toString());
 		json.append('}');
 		return json.toString();

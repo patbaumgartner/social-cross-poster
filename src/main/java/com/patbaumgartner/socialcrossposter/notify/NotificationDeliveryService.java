@@ -118,7 +118,7 @@ public class NotificationDeliveryService {
 		String credential = this.channelService.openSecret(workspace.slug(), channel);
 		NotificationPayload payload = new NotificationPayload(event.id(), event.eventKey(), workspace.id(),
 				workspace.label(), event.category(), event.summary(), event.publicationId(), event.deliveryId(),
-				event.scheduleId(), event.createdAt());
+				event.scheduleId(), event.connectionId(), event.createdAt());
 		SendResult result = channel.isSmtp() ? this.smtpSender.send(channel, credential, payload)
 				: this.webhookSender.send(channel.url(), credential, payload);
 		int attempts = row.attempts() + 1;

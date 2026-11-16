@@ -27,6 +27,7 @@
           · <small th:text="${e.createdAt}">time</small>
           <a th:if="${e.publicationId != null}"
              th:href="@{/w/{slug}/history/{id}(slug=${workspace.slug},id=${e.publicationId})}">publication</a>
+          <a th:if="${e.connectionId != null}" th:href="@{/w/{slug}/accounts(slug=${workspace.slug})}">accounts</a>
         </li>
       </ul>
 

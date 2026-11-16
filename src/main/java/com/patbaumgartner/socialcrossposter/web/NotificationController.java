@@ -120,7 +120,7 @@ public class NotificationController {
 				String credential = this.channels.openSecret(workspace.slug(), channel);
 				NotificationPayload payload = new NotificationPayload(0L, "test", workspace.id(), workspace.label(),
 						"TEST", "Test notification from social-cross-poster (workspace " + workspace.label() + ").",
-						null, null, null, OffsetDateTime.now());
+						null, null, null, null, OffsetDateTime.now());
 				SendResult result = channel.isSmtp() ? this.smtpSender.send(channel, credential, payload)
 						: this.webhookSender.send(channel.url(), credential, payload);
 				if ("SENT".equals(result.outcome())) {
