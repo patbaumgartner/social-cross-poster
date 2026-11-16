@@ -99,6 +99,32 @@ class AccountFlowTest {
 	}
 
 	@Test
+	void experimentalSectionHiddenAndTargetsFailClosedWhileOptInDisabled() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc.perform(get("/w/private/accounts").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(not(containsString("Experimental targets"))))
+			.andExpect(content().string(not(containsString("whatsapp-business"))));
+		this.mockMvc
+			.perform(post("/w/private/accounts/connections").with(csrf())
+				.session(session)
+				.param("platform", "whatsapp-business")
+				.param("mode", "pasted")
+				.param("credential", "x"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(flash().attribute("error", containsString("not supported")));
+		this.mockMvc
+			.perform(post("/w/private/accounts/connections").with(csrf())
+				.session(session)
+				.param("platform", "signal")
+				.param("mode", "pasted")
+				.param("credential", "x"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(flash().attribute("error", containsString("disabled")));
+		assertThat(this.connections.findAll()).isEmpty();
+	}
+
+	@Test
 	void connectStoresSecretEncryptedAndPageNeverShowsIt() throws Exception {
 		MockHttpSession session = login();
 		this.mockMvc

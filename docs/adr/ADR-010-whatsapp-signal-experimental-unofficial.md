@@ -1,6 +1,6 @@
 # ADR-010 — Personal WhatsApp Status and Signal: optional experiments
 
-- **Status:** Accepted as scope and feasibility policy; no bridge selected or support certified
+- **Status:** Accepted as scope and feasibility policy; no bridge selected or support certified; the gate itself is implemented 2026-11-17 (UC-14 first slice, no schema change: `app.experimental.enabled` opt-in flag off by default, `ExperimentalPlatforms` permanently rejects every WhatsApp Business variant and fails experimental targets closed until a bridge passes the feasibility probe, permanent “experimental / unofficial” label on the accounts page — still no bridge selected, no pairing UI, no Status/Signal posting)
 - **Date:** 2026-11-13
 
 ## Context
