@@ -35,15 +35,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * UC-14 end-to-end with the experimental opt-in flag ON
- * ({@code app.experimental.enabled=true}): the accounts page lists the experimental
- * candidates with their permanent "experimental / unofficial" label and an unavailable
- * status (no bridge has passed the ADR-010 feasibility probe), WhatsApp Business is never
- * offered or connectable, an experimental connect attempt fails closed without persisting
- * anything, and official platforms keep working (ADR-010).
+ * ({@code app.experimental.enabled=true}) and a dated feasibility record configured for
+ * {@code signal} ({@code app.experimental.feasibility.signal}): the accounts page lists
+ * the experimental candidates with their permanent "experimental / unofficial" label,
+ * WhatsApp Business is never offered or connectable, a target without a record fails
+ * closed with the feasibility reason, a target with a record but no wired bridge adapter
+ * fails closed with the no-adapter reason (nothing is persisted either way), and official
+ * platforms keep working (ADR-010).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "app.experimental.enabled=true")
+@TestPropertySource(properties = { "app.experimental.enabled=true",
+		"app.experimental.feasibility.signal=2026-11-17 test probe record" })
 class ExperimentalFlowTest {
 
 	@Autowired
@@ -94,11 +97,30 @@ class ExperimentalFlowTest {
 		this.mockMvc
 			.perform(post("/w/private/accounts/connections").with(csrf())
 				.session(session)
-				.param("platform", "signal")
+				.param("platform", "whatsapp-status")
 				.param("mode", "pasted")
 				.param("credential", "x"))
 			.andExpect(status().is3xxRedirection())
 			.andExpect(flash().attribute("error", containsString("feasibility")));
+		assertThat(this.connections.findAll()).isEmpty();
+	}
+
+	@Test
+	void connectExperimentalTargetWithRecordButNoWiredAdapterFailsClosed() throws Exception {
+		MockHttpSession session = login();
+		// signal has a feasibility record in this test profile, but no bridge adapter
+		// is wired — the pairing path stays closed and nothing is persisted.
+		this.mockMvc.perform(get("/w/private/accounts").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("no bridge adapter")));
+		this.mockMvc
+			.perform(post("/w/private/accounts/connections").with(csrf())
+				.session(session)
+				.param("platform", "signal")
+				.param("mode", "pasted")
+				.param("credential", "x"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(flash().attribute("error", containsString("no bridge adapter")));
 		assertThat(this.connections.findAll()).isEmpty();
 	}
 

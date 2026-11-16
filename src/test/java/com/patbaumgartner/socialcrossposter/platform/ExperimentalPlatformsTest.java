@@ -1,26 +1,48 @@
 package com.patbaumgartner.socialcrossposter.platform;
 
+import java.util.List;
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for the UC-14 experimental gate (ADR-010): WhatsApp Business is permanently
  * excluded in every spelling, the experimental candidates are exactly personal WhatsApp
- * Status and Signal, and no target becomes available without a passed feasibility record
- * — even when the opt-in flag is on. No Spring context.
+ * Status and Signal, and a target only becomes available when the opt-in flag is on, a
+ * dated feasibility record is configured <em>and</em> a bridge adapter is wired — no
+ * record or no adapter means unavailable, even with the flag on. No Spring context.
  */
 class ExperimentalPlatformsTest {
 
-	private final ExperimentalPlatforms disabled = new ExperimentalPlatforms(new ExperimentalProperties(false));
+	private static final Map<String, String> NO_RECORDS = Map.of();
 
-	private final ExperimentalPlatforms enabled = new ExperimentalPlatforms(new ExperimentalProperties(true));
+	private static final Map<String, String> SIGNAL_RECORD = Map.of("signal", "2026-11-17 local probe record (test)");
+
+	private final ExperimentalPlatforms disabled = gate(false, NO_RECORDS, List.of());
+
+	private final ExperimentalPlatforms enabled = gate(true, NO_RECORDS, List.of());
+
+	private static ExperimentalPlatforms gate(boolean enabled, Map<String, String> records,
+			List<PlatformProbe> probes) {
+		return new ExperimentalPlatforms(new ExperimentalProperties(enabled, records), new PlatformRegistry(probes));
+	}
+
+	private static PlatformProbe probeFor(String platform) {
+		PlatformProbe probe = mock(PlatformProbe.class);
+		given(probe.platform()).willReturn(platform);
+		return probe;
+	}
 
 	@Test
-	void optInFlagDefaultsToFalse() {
-		assertThat(new ExperimentalProperties(null).enabled()).isFalse();
+	void optInFlagAndRecordsDefaultToEmpty() {
+		assertThat(new ExperimentalProperties(null, null).enabled()).isFalse();
+		assertThat(new ExperimentalProperties(null, null).feasibility()).isEmpty();
 		assertThat(this.disabled.enabled()).isFalse();
 		assertThat(this.enabled.enabled()).isTrue();
 	}
@@ -61,6 +83,51 @@ class ExperimentalPlatformsTest {
 			assertThat(a.available()).isFalse();
 			assertThat(a.reason()).contains("feasibility");
 		}
+	}
+
+	@Test
+	void recordWithoutWiredBridgeAdapterStaysUnavailable() {
+		ExperimentalPlatforms gate = gate(true, SIGNAL_RECORD, List.of());
+		assertThat(gate.feasibilityPassed("signal")).isTrue();
+		assertThat(gate.feasibilityRecord("signal")).contains("2026-11-17");
+		assertThat(gate.bridgeWired("signal")).isFalse();
+		ExperimentalPlatforms.Availability a = gate.availability("signal");
+		assertThat(a.available()).isFalse();
+		assertThat(a.reason()).contains("no bridge adapter");
+		assertThatThrownBy(() -> gate.requireConnectable("signal")).isInstanceOf(ProbeException.class)
+			.hasMessageContaining("no bridge adapter");
+	}
+
+	@Test
+	void recordWithWiredBridgeAdapterOpensTheGate() {
+		ExperimentalPlatforms gate = gate(true, SIGNAL_RECORD, List.of(probeFor("signal")));
+		assertThat(gate.bridgeWired("signal")).isTrue();
+		ExperimentalPlatforms.Availability a = gate.availability("signal");
+		assertThat(a.available()).isTrue();
+		assertThat(a.reason()).contains("feasibility record passed");
+		assertThatCode(() -> gate.requireConnectable("signal")).doesNotThrowAnyException();
+		// whatsapp-status has no record even in this gate
+		assertThat(gate.availability("whatsapp-status").available()).isFalse();
+	}
+
+	@Test
+	void recordKeysAreNormalizedCaseInsensitively() {
+		ExperimentalPlatforms gate = gate(true, Map.of("Signal", "record text"), List.of());
+		assertThat(gate.feasibilityPassed("SIGNAL")).isTrue();
+	}
+
+	@Test
+	void invalidFeasibilityRecordsFailStartupClosed() {
+		assertThatThrownBy(() -> gate(true, Map.of("whatsapp-business", "record"), List.of()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("excluded")
+			.hasMessageContaining("ADR-010");
+		assertThatThrownBy(() -> gate(true, Map.of("telegram", "record"), List.of()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("not an experimental target");
+		assertThatThrownBy(() -> gate(true, Map.of("signal", "  "), List.of()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("dated ADR-010 record");
 	}
 
 	@Test
