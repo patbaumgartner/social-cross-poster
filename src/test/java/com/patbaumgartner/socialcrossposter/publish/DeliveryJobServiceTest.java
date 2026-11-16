@@ -211,6 +211,8 @@ class DeliveryJobServiceTest {
 		// not an UNKNOWN one
 		verify(this.notifications).notifyDeliveryNeedsAttention(WS, delivery(PublicationService.D_NEEDS_ATTENTION));
 		verify(this.notifications, never()).notifyDeliveryUnknown(any(), any());
+		// UC-12 alternative flow 6: only an UNKNOWN-stuck outcome is the outage class
+		verify(this.notifications, never()).notifyProviderOutage(any(), any(), any());
 	}
 
 	@Test
@@ -223,8 +225,9 @@ class DeliveryJobServiceTest {
 		this.service.settle(WS, "private", delivery(PublicationService.D_UNKNOWN), NOW);
 
 		// still UNKNOWN after reconciliation: default branch re-queues the job and UC-12
-		// records a DELIVERY_UNKNOWN event
+		// records a DELIVERY_UNKNOWN event plus the rate-limited PROVIDER_OUTAGE summary
 		verify(this.notifications).notifyDeliveryUnknown(WS, delivery(PublicationService.D_UNKNOWN));
+		verify(this.notifications).notifyProviderOutage(WS, delivery(PublicationService.D_UNKNOWN), NOW);
 		verify(this.notifications, never()).notifyDeliveryNeedsAttention(any(), any());
 	}
 
