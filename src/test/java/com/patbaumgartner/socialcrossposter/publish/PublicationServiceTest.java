@@ -14,6 +14,7 @@ import com.patbaumgartner.socialcrossposter.accounts.Connection;
 import com.patbaumgartner.socialcrossposter.accounts.ConnectionRepository;
 import com.patbaumgartner.socialcrossposter.accounts.SecretCipher;
 import com.patbaumgartner.socialcrossposter.contacts.MentionResolver;
+import com.patbaumgartner.socialcrossposter.media.ImportGrantService;
 import com.patbaumgartner.socialcrossposter.media.MediaAsset;
 import com.patbaumgartner.socialcrossposter.media.MediaException;
 import com.patbaumgartner.socialcrossposter.media.MediaService;
@@ -26,6 +27,7 @@ import com.patbaumgartner.socialcrossposter.content.PostRevision;
 import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
+import com.patbaumgartner.socialcrossposter.platform.ImportSource;
 import com.patbaumgartner.socialcrossposter.platform.MediaAttachment;
 import com.patbaumgartner.socialcrossposter.platform.PlatformPublisher;
 import com.patbaumgartner.socialcrossposter.platform.PlatformReconciler;
@@ -108,6 +110,8 @@ class PublicationServiceTest {
 
 	private MediaService media;
 
+	private ImportGrantService importGrants;
+
 	private PlatformPublisher publisher;
 
 	private ReconcilerRegistry reconcilers;
@@ -140,11 +144,12 @@ class PublicationServiceTest {
 		this.revisionMedia = mock(RevisionMediaRepository.class);
 		this.deliveryMedia = mock(DeliveryMediaRepository.class);
 		this.media = mock(MediaService.class);
+		this.importGrants = mock(ImportGrantService.class);
 		this.publisher = mock(PlatformPublisher.class);
 		this.reconciler = mock(PlatformReconciler.class);
 		this.service = new PublicationService(this.posts, this.previewService, this.mentions, this.accounts,
 				this.connections, this.secrets, this.publishers, this.reconcilers, this.publications, this.deliveries,
-				this.attempts, this.revisionMedia, this.deliveryMedia, this.media);
+				this.attempts, this.revisionMedia, this.deliveryMedia, this.media, this.importGrants);
 
 		this.post = new Post(POST_ID, WS, "Title", PostService.STATE_DRAFT, REVISION_ID, 1L, NOW, NOW);
 		this.revision = new PostRevision(REVISION_ID, WS, POST_ID, 1, "hello", NOW);
@@ -535,6 +540,7 @@ class PublicationServiceTest {
 		given(this.media.findBySha(WS, sha))
 			.willReturn(Optional.of(new MediaAsset(60L, WS, "chart.png", "image/png", 3L, sha, NOW)));
 		given(this.media.outgoingBytes(WS, sha)).willReturn(outgoing);
+		given(this.publisher.supportsMediaUpload()).willReturn(true);
 		given(this.publisher.publish(any(PublishContext.class)))
 			.willReturn(PublishResult.success("telegram:message:42"));
 
@@ -561,13 +567,15 @@ class PublicationServiceTest {
 		given(this.media.findBySha(WS, sha))
 			.willReturn(Optional.of(new MediaAsset(60L, WS, "chart.png", "image/png", 3L, sha, NOW)));
 		given(this.media.outgoingBytes(WS, sha)).willThrow(new MediaException("derivative unavailable"));
+		given(this.publisher.supportsMediaUpload()).willReturn(true);
 
 		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
 
 		assertThat(result.state()).isEqualTo(PublicationService.D_NEEDS_REVIEW);
 		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "authorize".equals(a.stage())
 				&& "FAILED".equals(a.outcome()) && a.detail().contains("no longer available")));
-		verifyNoInteractions(this.publisher);
+		// the capability probe happened, but no remote write
+		verify(this.publisher, never()).publish(any(PublishContext.class));
 	}
 
 	@Test
@@ -578,13 +586,116 @@ class PublicationServiceTest {
 		given(this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(DELIVERY))
 			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
 		given(this.media.findBySha(WS, sha)).willReturn(Optional.empty());
+		given(this.publisher.supportsMediaUpload()).willReturn(true);
 
 		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
 
 		assertThat(result.state()).isEqualTo(PublicationService.D_NEEDS_REVIEW);
 		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "authorize".equals(a.stage())
 				&& "FAILED".equals(a.outcome()) && a.detail().contains("no longer available")));
-		verifyNoInteractions(this.publisher);
+		// the capability probe happened, but no remote write
+		verify(this.publisher, never()).publish(any(PublishContext.class));
+	}
+
+	@Test
+	void mediaAttachedWithImportCapablePlatformIsNotBlocked() {
+		attachOneImage("b".repeat(64));
+		given(this.publisher.supportsMediaUpload()).willReturn(false);
+		given(this.publisher.supportsMediaImport()).willReturn(true);
+		given(this.posts.requireRevisionById(WS, REVISION_ID)).willReturn(this.revision);
+
+		assertThat(this.service.blockersOf(WS, REVISION_ID)).isEmpty();
+	}
+
+	@Test
+	void executeDeliveryMintsImportGrantsForImportCapablePlatformAndRevokesOnSuccess() {
+		String sha = "a".repeat(64);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(DELIVERY))
+			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
+		given(this.publisher.supportsMediaUpload()).willReturn(false);
+		given(this.publisher.supportsMediaImport()).willReturn(true);
+		given(this.importGrants.mint(eq(WS), eq(DELIVERY), eq(sha), eq(ImportGrantService.PURPOSE_PLATFORM_IMPORT),
+				any(OffsetDateTime.class)))
+			.willReturn(new ImportGrantService.MintedGrant(77L,
+					"http://localhost:8080/media/grants/77?exp=1&sig=deadbeef", NOW.plusMinutes(30)));
+		given(this.publisher.publish(any(PublishContext.class)))
+			.willReturn(PublishResult.success("mastodon:status:42"));
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_SUCCESS);
+		ArgumentCaptor<PublishContext> captor = ArgumentCaptor.forClass(PublishContext.class);
+		verify(this.publisher).publish(captor.capture());
+		PublishContext ctx = captor.getValue();
+		assertThat(ctx.media()).isEmpty();
+		assertThat(ctx.importSources()).hasSize(1);
+		ImportSource source = ctx.importSources().get(0);
+		assertThat(source.sha256()).isEqualTo(sha);
+		assertThat(source.url()).contains("/media/grants/77");
+		assertThat(source.altText()).isEqualTo("Chart");
+		// ADR-008 step 5: a confirmed provider write retires the delivery's grants
+		verify(this.importGrants).revokeActiveForDelivery(eq(WS), eq(DELIVERY), any(OffsetDateTime.class));
+	}
+
+	@Test
+	void executeDeliveryDoesNotRevokeImportGrantsOnUnconfirmedOutcome() {
+		String sha = "a".repeat(64);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(DELIVERY))
+			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
+		given(this.publisher.supportsMediaUpload()).willReturn(false);
+		given(this.publisher.supportsMediaImport()).willReturn(true);
+		given(this.importGrants.mint(any(), any(), anyString(), anyString(), any(OffsetDateTime.class)))
+			.willReturn(new ImportGrantService.MintedGrant(77L, "http://localhost:8080/media/grants/77?exp=1&sig=x",
+					NOW.plusMinutes(30)));
+		given(this.publisher.publish(any(PublishContext.class))).willReturn(PublishResult.unknown("timeout"));
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_UNKNOWN);
+		verify(this.importGrants, never()).revokeActiveForDelivery(any(), any(), any());
+	}
+
+	@Test
+	void executeDeliveryWithImportCapablePlatformAndMissingAssetFailsClosedWithoutRemoteWrite() {
+		String sha = "f".repeat(64);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(DELIVERY))
+			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
+		given(this.publisher.supportsMediaUpload()).willReturn(false);
+		given(this.publisher.supportsMediaImport()).willReturn(true);
+		given(this.importGrants.mint(any(), any(), anyString(), anyString(), any(OffsetDateTime.class)))
+			.willThrow(new MediaException("Unknown media asset for this workspace."));
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_NEEDS_REVIEW);
+		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "authorize".equals(a.stage())
+				&& "FAILED".equals(a.outcome()) && a.detail().contains("no longer available")));
+		verify(this.publisher, never()).publish(any(PublishContext.class));
+	}
+
+	@Test
+	void executeDeliveryWithNeitherUploadNorImportSupportFailsClosedWithoutRemoteWrite() {
+		String sha = "f".repeat(64);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.deliveryMedia.findAllByDeliveryIdOrderByPositionAsc(DELIVERY))
+			.willReturn(List.of(new DeliveryMedia(50L, WS, DELIVERY, 1, sha, "Chart", NOW)));
+		given(this.publisher.supportsMediaUpload()).willReturn(false);
+		given(this.publisher.supportsMediaImport()).willReturn(false);
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_NEEDS_REVIEW);
+		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "authorize".equals(a.stage())
+				&& "FAILED".equals(a.outcome()) && a.detail().contains("neither upload nor import")));
+		verify(this.publisher, never()).publish(any(PublishContext.class));
+		verifyNoInteractions(this.importGrants);
 	}
 
 	private void attachOneImage(String sha) {

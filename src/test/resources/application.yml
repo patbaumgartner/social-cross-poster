@@ -35,6 +35,13 @@ app:
   # UC-13 media library writes to a temp dir in tests.
   media:
     dir: ${java.io.tmpdir}/scp-test-media
+  # UC-13 fourth slice: import grants sign with the test secrets key; the fetch
+  # rate limit uses a small cap so the 429 behavior is testable cheaply.
+  import-grants:
+    base-url: ${app.base-url}
+    signing-key: ${app.secrets.key}
+    signing-key-id: ${app.secrets.key-id}
+    max-fetches-per-window: 3
   # UC-12 second slice: the webhook outbox worker is off in tests (runDue is
   # driven manually), and 127.0.0.1 is allow-listed so tests can run a local
   # HttpServer as a webhook receiver (plain http only for allow-listed hosts).

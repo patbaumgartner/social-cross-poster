@@ -33,8 +33,11 @@ import com.patbaumgartner.socialcrossposter.content.PostRevisionRepository;
 import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestinationRepository;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverrideRepository;
+import com.patbaumgartner.socialcrossposter.media.ImportGrantService;
 import com.patbaumgartner.socialcrossposter.media.MediaAsset;
 import com.patbaumgartner.socialcrossposter.media.MediaAssetRepository;
+import com.patbaumgartner.socialcrossposter.media.MediaImportGrant;
+import com.patbaumgartner.socialcrossposter.media.MediaImportGrantRepository;
 import com.patbaumgartner.socialcrossposter.media.OutgoingImageSanitizer;
 import com.patbaumgartner.socialcrossposter.media.RevisionMedia;
 import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
@@ -167,6 +170,12 @@ class MediaFlowTest {
 	DeliveryMediaRepository deliveryMedia;
 
 	@Autowired
+	MediaImportGrantRepository importGrantRows;
+
+	@Autowired
+	ImportGrantService importGrants;
+
+	@Autowired
 	PublicationService publicationService;
 
 	@MockitoBean
@@ -186,8 +195,10 @@ class MediaFlowTest {
 		this.remoteActions.deleteAll();
 		this.jobs.deleteAll();
 		this.attempts.deleteAll();
-		// delivery_media references delivery — delete before deliveries.
+		// delivery_media references delivery — delete before deliveries; the V15
+		// media_import_grant rows reference delivery too (UC-13 fourth slice).
 		this.deliveryMedia.deleteAll();
+		this.importGrantRows.deleteAll();
 		this.deliveries.deleteAll();
 		this.scheduleRepo.deleteAll();
 		this.publications.deleteAll();
@@ -401,6 +412,65 @@ class MediaFlowTest {
 		assertThat(this.revisionMedia.findAllByRevisionIdOrderByPositionAsc(
 				this.posts.findById(foreignPostId).orElseThrow().currentRevisionId()))
 			.isEmpty();
+	}
+
+	@Test
+	void importGrantRouteServesSanitizedDerivativeWithoutLoginAndFailsClosed() throws Exception {
+		MockHttpSession session = login();
+		Long workspaceId = workspaceId("private");
+		Long accountId = seedDestination("private", "News channel");
+		Long postId = createPost(session, "private", "Grant post", "hello", accountId);
+		MediaAsset asset = uploadPng(session, postId);
+		var publication = this.publicationService.create(workspaceId, "private", postId, "key-grant");
+		Long deliveryId = this.deliveries
+			.findAllByWorkspaceIdAndPublicationIdOrderByIdAsc(workspaceId, publication.id())
+			.get(0)
+			.id();
+
+		// UC-13 fourth slice: mint one short-lived revocable grant for the approved image
+		OffsetDateTime now = OffsetDateTime.now();
+		ImportGrantService.MintedGrant minted = this.importGrants.mint(workspaceId, deliveryId, asset.sha256(),
+				ImportGrantService.PURPOSE_PLATFORM_IMPORT, now);
+		assertThat(minted.url()).startsWith("http://localhost:8080/media/grants/" + minted.grantId() + "?exp=");
+		String path = minted.url().substring(minted.url().indexOf("/media/grants"));
+		String sig = minted.url().substring(minted.url().indexOf("sig=") + 4);
+
+		// the signed URL is the bearer capability: no login needed, only the
+		// metadata-stripped derivative is served, and never cacheable (ADR-008, ADR-016)
+		byte[] stripped = OutgoingImageSanitizer.strip("image/png", PNG);
+		this.mockMvc.perform(get(path))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Content-Type", containsString("image/png")))
+			.andExpect(header().string("Cache-Control", containsString("no-store")))
+			.andExpect(content().bytes(stripped));
+
+		// only the sha256 of the signature is persisted — never the signed URL (ADR-007)
+		List<MediaImportGrant> rows = new ArrayList<>();
+		this.importGrantRows.findAll().forEach(rows::add);
+		assertThat(rows).hasSize(1);
+		assertThat(rows.get(0).tokenHash()).hasSize(64);
+		assertThat(rows.get(0).tokenHash()).isNotEqualTo(sig);
+
+		// a tampered signature or an unknown grant is an indistinguishable 404 (ADR-013)
+		char flipped = sig.charAt(sig.length() - 1) == 'a' ? 'b' : 'a';
+		String tampered = path.substring(0, path.indexOf("sig=") + 4) + sig.substring(0, sig.length() - 1) + flipped;
+		this.mockMvc.perform(get(tampered)).andExpect(status().isNotFound());
+		this.mockMvc.perform(get("/media/grants/999999?exp=1&sig=" + sig)).andExpect(status().isNotFound());
+
+		// the per-grant fetch rate limit kicks in (test cap: 3 fetches per window)
+		this.mockMvc.perform(get(path)).andExpect(status().isOk());
+		this.mockMvc.perform(get(path)).andExpect(status().isOk());
+		this.mockMvc.perform(get(path)).andExpect(status().isTooManyRequests());
+
+		// a retry mints a fresh grant and revokes the previous one; revoked grants are
+		// 410
+		ImportGrantService.MintedGrant renewed = this.importGrants.mint(workspaceId, deliveryId, asset.sha256(),
+				ImportGrantService.PURPOSE_PLATFORM_IMPORT, now);
+		String path2 = renewed.url().substring(renewed.url().indexOf("/media/grants"));
+		this.mockMvc.perform(get(path)).andExpect(status().isGone());
+		this.mockMvc.perform(get(path2)).andExpect(status().isOk());
+		this.importGrants.revoke(workspaceId, renewed.grantId(), OffsetDateTime.now());
+		this.mockMvc.perform(get(path2)).andExpect(status().isGone());
 	}
 
 	private MediaAsset uploadPng(MockHttpSession session, Long postId) throws Exception {
