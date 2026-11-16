@@ -38,6 +38,8 @@ import com.patbaumgartner.socialcrossposter.media.MediaAssetRepository;
 import com.patbaumgartner.socialcrossposter.media.OutgoingImageSanitizer;
 import com.patbaumgartner.socialcrossposter.media.RevisionMedia;
 import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
+import com.patbaumgartner.socialcrossposter.notify.NotificationChannelRepository;
+import com.patbaumgartner.socialcrossposter.notify.NotificationDeliveryRepository;
 import com.patbaumgartner.socialcrossposter.notify.NotificationEventRepository;
 import com.patbaumgartner.socialcrossposter.platform.PublishContext;
 import com.patbaumgartner.socialcrossposter.platform.PublishResult;
@@ -150,6 +152,12 @@ class MediaFlowTest {
 	NotificationEventRepository notificationEvents;
 
 	@Autowired
+	NotificationChannelRepository notificationChannels;
+
+	@Autowired
+	NotificationDeliveryRepository notificationDeliveries;
+
+	@Autowired
 	RevisionMediaRepository revisionMedia;
 
 	@Autowired
@@ -167,6 +175,10 @@ class MediaFlowTest {
 	@BeforeEach
 	@AfterEach
 	void resetState() {
+		// notification_delivery references notification_event/notification_channel —
+		// delete outbox rows and channels first (FK-safe order, UC-12 second slice).
+		this.notificationDeliveries.deleteAll();
+		this.notificationChannels.deleteAll();
 		this.notificationEvents.deleteAll();
 		this.revisionMedia.deleteAll();
 		this.mediaAssets.deleteAll();

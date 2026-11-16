@@ -20,12 +20,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit tests for {@link NotificationService} (UC-12 first slice, ADR-013, ADR-015):
- * {@code record} deduplicates on an existing {@code (workspace, event_key)} and returns
- * the existing row without saving, saves new events, {@code eventsOf} delegates to the
- * workspace-scoped finder, and the emit helpers build the expected redacted keys,
- * categories and summaries — summaries must never contain the payload text. Mocked
- * repository, no Spring context.
+ * Unit tests for {@link NotificationService} (UC-12, ADR-013, ADR-015): {@code record}
+ * deduplicates on an existing {@code (workspace, event_key)} and returns the existing row
+ * without saving or enqueueing, saves new events and enqueues deduplicated webhook outbox
+ * rows for them (second slice), {@code eventsOf} delegates to the workspace-scoped
+ * finder, and the emit helpers build the expected redacted keys, categories and summaries
+ * — summaries must never contain the payload text. Mocked repositories/services, no
+ * Spring context.
  */
 class NotificationServiceTest {
 
@@ -35,12 +36,15 @@ class NotificationServiceTest {
 
 	private NotificationEventRepository events;
 
+	private NotificationDeliveryService deliveries;
+
 	private NotificationService service;
 
 	@BeforeEach
 	void setUp() {
 		this.events = mock(NotificationEventRepository.class);
-		this.service = new NotificationService(this.events);
+		this.deliveries = mock(NotificationDeliveryService.class);
+		this.service = new NotificationService(this.events, this.deliveries);
 		given(this.events.save(any(NotificationEvent.class))).willAnswer((inv) -> {
 			NotificationEvent e = inv.getArgument(0);
 			return new NotificationEvent(42L, e.workspaceId(), e.eventKey(), e.category(), e.publicationId(),
@@ -50,7 +54,7 @@ class NotificationServiceTest {
 	}
 
 	@Test
-	void recordSavesNewEvent() {
+	void recordSavesNewEventAndEnqueuesWebhookOutboxRows() {
 		NotificationEvent saved = this.service.record(WS, "delivery:5:failed", NotificationService.C_DELIVERY_FAILED,
 				100L, 5L, null, "summary");
 
@@ -61,10 +65,12 @@ class NotificationServiceTest {
 		assertThat(saved.publicationId()).isEqualTo(100L);
 		assertThat(saved.deliveryId()).isEqualTo(5L);
 		verify(this.events).save(any(NotificationEvent.class));
+		// UC-12 second slice: a newly recorded event enqueues outbox rows per channel
+		verify(this.deliveries).enqueueForEvent(saved);
 	}
 
 	@Test
-	void recordDeduplicatesOnExistingKeyAndSavesNothing() {
+	void recordDeduplicatesOnExistingKeyAndSavesAndEnqueuesNothing() {
 		NotificationEvent existing = new NotificationEvent(7L, WS, "delivery:5:failed",
 				NotificationService.C_DELIVERY_FAILED, 100L, 5L, null, "original summary", NOW);
 		given(this.events.findByWorkspaceIdAndEventKey(WS, "delivery:5:failed")).willReturn(Optional.of(existing));
@@ -74,6 +80,7 @@ class NotificationServiceTest {
 
 		assertThat(result).isSameAs(existing);
 		verify(this.events, never()).save(any());
+		verify(this.deliveries, never()).enqueueForEvent(any());
 	}
 
 	@Test

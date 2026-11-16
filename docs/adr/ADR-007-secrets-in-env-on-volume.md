@@ -1,6 +1,6 @@
 # ADR-007 — Encrypted workspace secrets with externally supplied keys
 
-- **Status:** Accepted; replaces the pre-implementation plaintext-DB/deferred-encryption sketch; AES-256-GCM cipher with env-supplied versioned key implemented 2026-11-14
+- **Status:** Accepted; replaces the pre-implementation plaintext-DB/deferred-encryption sketch; AES-256-GCM cipher with env-supplied versioned key implemented 2026-11-14; webhook notification signing secrets are sealed with the same cipher bound to AAD `<slug>:notify-webhook:<label>` (UC-12 second slice, Flyway V12, 2026-11-16)
 - **Date:** 2026-11-13
 
 ## Context

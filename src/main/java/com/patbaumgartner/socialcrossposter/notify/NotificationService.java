@@ -10,14 +10,14 @@ import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.scheduling.PublicationSchedule;
 
 /**
- * In-app notification events (UC-12 first slice, ADR-004, ADR-013, ADR-015). Events are
- * durable, deduplicated per workspace by {@code event_key} (step 2) and redacted —
- * summaries carry workspace/destination identity and a safe category only, never draft
- * text, tokens, raw provider bodies or signed URLs (alternative flow 4). Recording is
- * best-effort and idempotent: the same event key returns the existing event. In-app
- * events are authoritative and shown on the workspace dashboard (step 5); external
- * webhook/SMTP delivery with signatures, bounded retries and SSRF-protected targets is a
- * later UC-12 slice. All access is workspace-scoped (ADR-013).
+ * In-app notification events (UC-12, ADR-004, ADR-013, ADR-015). Events are durable,
+ * deduplicated per workspace by {@code event_key} (step 2) and redacted — summaries carry
+ * workspace/destination identity and a safe category only, never draft text, tokens, raw
+ * provider bodies or signed URLs (alternative flow 4). Recording is idempotent: the same
+ * event key returns the existing event. Every newly recorded event also enqueues one
+ * deduplicated outbox row per enabled, category-interested webhook channel (second
+ * slice); in-app events remain authoritative and are shown on the workspace dashboard
+ * (step 5). All access is workspace-scoped (ADR-013).
  */
 @Service
 public class NotificationService {
@@ -36,20 +36,32 @@ public class NotificationService {
 
 	private final NotificationEventRepository events;
 
-	public NotificationService(NotificationEventRepository events) {
+	private final NotificationDeliveryService deliveries;
+
+	public NotificationService(NotificationEventRepository events, NotificationDeliveryService deliveries) {
 		this.events = events;
+		this.deliveries = deliveries;
 	}
 
 	/**
 	 * Records an event, deduplicated by {@code (workspaceId, eventKey)}: if the event
 	 * already exists the existing row is returned and nothing is written (UC-12 step 2).
+	 * A newly recorded event also enqueues deduplicated webhook outbox rows (second
+	 * slice); enqueueing is idempotent, and delivery failures never create events, so
+	 * this cannot recurse (UC-12 alternative flow 3).
 	 */
 	@Transactional
 	public NotificationEvent record(Long workspaceId, String eventKey, String category, Long publicationId,
 			Long deliveryId, Long scheduleId, String summary) {
-		return this.events.findByWorkspaceIdAndEventKey(workspaceId, eventKey)
-			.orElseGet(() -> this.events.save(new NotificationEvent(null, workspaceId, eventKey, category,
-					publicationId, deliveryId, scheduleId, summary, OffsetDateTime.now())));
+		java.util.Optional<NotificationEvent> existing = this.events.findByWorkspaceIdAndEventKey(workspaceId,
+				eventKey);
+		if (existing.isPresent()) {
+			return existing.get();
+		}
+		NotificationEvent saved = this.events.save(new NotificationEvent(null, workspaceId, eventKey, category,
+				publicationId, deliveryId, scheduleId, summary, OffsetDateTime.now()));
+		this.deliveries.enqueueForEvent(saved);
+		return saved;
 	}
 
 	/** The workspace's newest events first, capped for the dashboard (UC-12 step 5). */
