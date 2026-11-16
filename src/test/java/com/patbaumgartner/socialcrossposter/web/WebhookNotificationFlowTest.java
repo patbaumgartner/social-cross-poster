@@ -369,10 +369,16 @@ class WebhookNotificationFlowTest {
 		this.mockMvc
 			.perform(post("/w/private/notifications/channels/" + channel.id() + "/test").with(csrf()).session(session))
 			.andExpect(status().is3xxRedirection())
-			.andExpect(flash().attribute("notice", containsString("delivered")));
+			.andExpect(flash().attribute("notice", containsString("delivered")))
+			.andExpect(flash().attribute("notice", containsString("Private")))
+			.andExpect(flash().attribute("notice", containsString(hookUrl())));
 
 		assertThat(this.received).hasSize(1);
-		assertThat(this.received.get(0).body()).contains("\"eventKey\":\"test\"").contains("\"category\":\"TEST\"");
+		// the test payload names the workspace and the exact recipient (postconditions)
+		assertThat(this.received.get(0).body()).contains("\"eventKey\":\"test\"")
+			.contains("\"category\":\"TEST\"")
+			.contains("\"workspaceLabel\":\"Private\"")
+			.contains(hookUrl());
 		assertThat(this.notificationEvents.count()).isEqualTo(eventsBefore); // test sends
 																				// persist
 																				// nothing

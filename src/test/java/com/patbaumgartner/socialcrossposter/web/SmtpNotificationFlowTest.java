@@ -409,10 +409,18 @@ class SmtpNotificationFlowTest {
 		this.mockMvc
 			.perform(post("/w/private/notifications/channels/" + channel.id() + "/test").with(csrf()).session(session))
 			.andExpect(status().is3xxRedirection())
-			.andExpect(flash().attribute("notice", containsString("delivered")));
+			.andExpect(flash().attribute("notice", containsString("delivered")))
+			.andExpect(flash().attribute("notice", containsString("Private")))
+			.andExpect(flash().attribute("notice", containsString(relayHost() + ":" + relayPort())))
+			.andExpect(flash().attribute("notice", containsString("ops@example.com")));
 
 		assertThat(this.smtp.received).contains("DATA");
-		assertThat(this.smtp.dataBody).contains("\"eventKey\":\"test\"").contains("\"category\":\"TEST\"");
+		// the test mail names the workspace and the exact recipient (postconditions)
+		assertThat(this.smtp.dataBody).contains("\"eventKey\":\"test\"")
+			.contains("\"category\":\"TEST\"")
+			.contains("\"workspaceLabel\":\"Private\"")
+			.contains(relayHost() + ":" + relayPort())
+			.contains("ops@example.com");
 		assertThat(this.notificationEvents.count()).isEqualTo(eventsBefore); // test sends
 																				// persist
 																				// nothing
