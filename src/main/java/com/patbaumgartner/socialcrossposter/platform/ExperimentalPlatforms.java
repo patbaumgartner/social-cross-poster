@@ -3,8 +3,10 @@ package com.patbaumgartner.socialcrossposter.platform;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * UC-14 experimental-target gate (ADR-010). Personal WhatsApp Status and Signal are
@@ -14,11 +16,12 @@ import org.springframework.stereotype.Component;
  * failure never falls back to Business messaging.
  *
  * <p>
- * No bridge has passed the ADR-010 feasibility probe yet, so {@link #FEASIBILITY_PASSED}
- * is empty and every experimental target reports unavailable — no REST endpoint, pairing
- * wizard or successful Status/story posting is promised or fabricated. When a bridge is
- * accepted, its platform key is recorded here together with the dated feasibility record
- * required by docs/platforms/README.md, and only then does the gate open for that key.
+ * Feasibility records come from configuration ({@code app.experimental.feasibility},
+ * empty by default — no bridge has passed the ADR-010 probe as of 2026-11-17) and are
+ * validated at startup: excluded, non-experimental or blank entries fail the boot closed.
+ * Even with a record on file, a target only becomes available when a bridge adapter
+ * ({@link PlatformProbe}) for that key is wired in this build — until then no REST
+ * endpoint, pairing wizard or successful Status/story posting is promised or fabricated.
  * Signal message and story stay separate capabilities (UC-14 alternative flow 3): story
  * is deliberately absent from {@link #DESTINATION_KINDS} for {@code signal} until it
  * passes its own probe, so a story target is blocked instead of falling back to a chat
@@ -36,12 +39,6 @@ public class ExperimentalPlatforms {
 	private static final Set<String> EXPERIMENTAL = Set.of("whatsapp-status", "signal");
 
 	/**
-	 * Platform keys whose bridge passed the ADR-010 feasibility probe. Empty as of
-	 * 2026-11-17 — no bridge is selected or support certified (ADR-010 status).
-	 */
-	private static final Set<String> FEASIBILITY_PASSED = Set.of();
-
-	/**
 	 * Verified destination kinds per experimental platform (UC-14 step 4: only the
 	 * verified kind may be added, with the permanent experimental label). Signal story is
 	 * a separate capability that has not passed its probe, so it is not listed — a
@@ -52,8 +49,36 @@ public class ExperimentalPlatforms {
 
 	private final ExperimentalProperties properties;
 
-	public ExperimentalPlatforms(ExperimentalProperties properties) {
+	private final PlatformRegistry platforms;
+
+	/**
+	 * Normalized, validated feasibility records (platform key → dated ADR-010 record).
+	 * Invalid entries fail startup closed.
+	 */
+	private final Map<String, String> records;
+
+	public ExperimentalPlatforms(ExperimentalProperties properties, PlatformRegistry platforms) {
 		this.properties = properties;
+		this.platforms = platforms;
+		Map<String, String> normalized = new TreeMap<>();
+		for (Map.Entry<String, String> entry : properties.feasibility().entrySet()) {
+			String key = normalize(entry.getKey());
+			String value = entry.getValue();
+			if (isExcluded(key)) {
+				throw new IllegalStateException("app.experimental.feasibility contains the excluded platform '" + key
+						+ "' — WhatsApp Business is not supported (ADR-010).");
+			}
+			if (!isExperimental(key)) {
+				throw new IllegalStateException("app.experimental.feasibility key '" + key
+						+ "' is not an experimental target (whatsapp-status, signal).");
+			}
+			if (!StringUtils.hasText(value)) {
+				throw new IllegalStateException(
+						"app.experimental.feasibility entry '" + key + "' needs a dated ADR-010 record text.");
+			}
+			normalized.put(key, value.trim());
+		}
+		this.records = Map.copyOf(normalized);
 	}
 
 	/** Whether the experimental opt-in profile is enabled at all. */
@@ -80,9 +105,22 @@ public class ExperimentalPlatforms {
 		return p.equals("whatsapp-business") || (p.startsWith("whatsapp") && p.contains("business"));
 	}
 
-	/** Whether a dated ADR-010 feasibility record passed for this platform key. */
+	/** Whether a dated ADR-010 feasibility record is on file for this platform key. */
 	public boolean feasibilityPassed(String platform) {
-		return FEASIBILITY_PASSED.contains(normalize(platform));
+		return this.records.containsKey(normalize(platform));
+	}
+
+	/** The dated feasibility record on file for this platform, or empty. */
+	public String feasibilityRecord(String platform) {
+		return this.records.getOrDefault(normalize(platform), "");
+	}
+
+	/**
+	 * Whether a bridge adapter ({@link PlatformProbe}) for this key is wired in this
+	 * build.
+	 */
+	public boolean bridgeWired(String platform) {
+		return this.platforms.all().containsKey(normalize(platform));
 	}
 
 	/**
@@ -94,9 +132,11 @@ public class ExperimentalPlatforms {
 	}
 
 	/**
-	 * Availability view for one experimental target: never available without a passed
-	 * probe. {@code kinds} lists the candidate destination kinds (story is not among
-	 * Signal's until its own capability probe passes).
+	 * Availability view for one experimental target: available only when the opt-in flag
+	 * is on, a dated feasibility record is on file <em>and</em> a bridge adapter is wired
+	 * — otherwise unavailable with the precise reason. {@code kinds} lists the candidate
+	 * destination kinds (story is not among Signal's until its own capability probe
+	 * passes).
 	 */
 	public Availability availability(String platform) {
 		String p = normalize(platform);
@@ -116,15 +156,22 @@ public class ExperimentalPlatforms {
 					"unavailable — no bridge has passed the ADR-010 feasibility probe, so no pairing endpoint is offered",
 					destinationKinds(p));
 		}
-		return new Availability(p, true, "feasibility record passed — opt in through a locally protected setup path",
+		if (!bridgeWired(p)) {
+			return new Availability(p, false,
+					"unavailable — feasibility record on file but no bridge adapter is wired in this build, so the pairing path stays closed",
+					destinationKinds(p));
+		}
+		return new Availability(p, true,
+				"feasibility record passed and bridge wired — opt in through a locally protected setup path",
 				destinationKinds(p));
 	}
 
 	/**
 	 * Fail-closed gate for connect/destination operations: excluded platforms are always
-	 * rejected, experimental targets only pass when the opt-in flag is on <em>and</em> a
-	 * feasibility record exists. Official platforms pass through unchanged. Messages are
-	 * sanitized and never contain credential material (ADR-007).
+	 * rejected; experimental targets only pass when the opt-in flag is on, a dated
+	 * feasibility record exists <em>and</em> a bridge adapter is wired in this build.
+	 * Official platforms pass through unchanged. Messages are sanitized and never contain
+	 * credential material (ADR-007).
 	 */
 	public void requireConnectable(String platform) {
 		String p = normalize(platform);
@@ -140,6 +187,10 @@ public class ExperimentalPlatforms {
 			if (!feasibilityPassed(p)) {
 				throw new ProbeException("Experimental target '" + p
 						+ "' is unavailable: no bridge has passed the ADR-010 feasibility probe, so no pairing endpoint is offered.");
+			}
+			if (!bridgeWired(p)) {
+				throw new ProbeException("Experimental target '" + p
+						+ "' has a feasibility record but no bridge adapter is wired in this build — the locally protected pairing path is not available.");
 			}
 		}
 	}

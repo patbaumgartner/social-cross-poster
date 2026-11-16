@@ -102,3 +102,9 @@ app:
     # label but stay unavailable until a bridge passes the ADR-010 feasibility
     # probe. WhatsApp Business is permanently excluded and never offered.
     enabled: ${APP_EXPERIMENTAL_ENABLED:false}
+    # Dated ADR-010 feasibility records, one entry per experimental platform key,
+    # e.g. APP_EXPERIMENTAL_FEASIBILITY_SIGNAL="2026-11-17 local probe record …".
+    # Empty by default (no bridge has passed the probe). Excluded, non-experimental
+    # or blank entries fail startup closed. A record alone does not open the gate:
+    # the target also needs a wired bridge adapter in this build.
+    feasibility: {}
