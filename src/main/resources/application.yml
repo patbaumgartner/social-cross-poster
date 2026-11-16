@@ -62,3 +62,22 @@ app:
     # dedicated volume (/data/media).
     dir: ${APP_MEDIA_DIR:data/media}
     max-bytes: ${APP_MEDIA_MAX_BYTES:10485760}
+  notify:
+    # UC-12 second slice: external webhook notification channels (arc42 section 8
+    # SSRF rules). APP_NOTIFY_WORKER_ENABLED=false disables the scheduled outbox
+    # worker (tests drive NotificationDeliveryService.runDue manually).
+    worker-enabled: ${APP_NOTIFY_WORKER_ENABLED:true}
+    poll-interval-ms: ${APP_NOTIFY_POLL_INTERVAL_MS:5000}
+    initial-delay-ms: ${APP_NOTIFY_INITIAL_DELAY_MS:2000}
+    # UC-12 step 4: at most three total delivery attempts per (event, channel).
+    max-attempts: ${APP_NOTIFY_MAX_ATTEMPTS:3}
+    backoff-base-seconds: ${APP_NOTIFY_BACKOFF_BASE_SECONDS:60}
+    backoff-cap-seconds: ${APP_NOTIFY_BACKOFF_CAP_SECONDS:3600}
+    connect-timeout-ms: ${APP_NOTIFY_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${APP_NOTIFY_READ_TIMEOUT_MS:10000}
+    # Deployment operator allow-list for intentional internal webhook targets
+    # (comma-separated hosts, e.g. 127.0.0.1 for a local receiver). Empty by
+    # default: only https URLs to public hosts pass the SSRF guard; localhost,
+    # cloud metadata endpoints and private/loopback/link-local ranges are always
+    # denied. Plain http is only accepted for allow-listed hosts.
+    allowed-internal-hosts: ${APP_NOTIFY_ALLOWED_INTERNAL_HOSTS:}
