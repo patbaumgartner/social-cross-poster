@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.patbaumgartner.socialcrossposter.notify.NotificationService;
+import com.patbaumgartner.socialcrossposter.platform.ExperimentalPlatforms;
+import com.patbaumgartner.socialcrossposter.platform.ExperimentalProperties;
 import com.patbaumgartner.socialcrossposter.platform.PlatformProbe;
 import com.patbaumgartner.socialcrossposter.platform.PlatformRegistry;
 import com.patbaumgartner.socialcrossposter.platform.ProbeException;
@@ -60,8 +62,9 @@ class ConnectionServiceTest {
 		this.platforms = mock(PlatformRegistry.class);
 		this.notifications = mock(NotificationService.class);
 		this.probe = mock(PlatformProbe.class);
+		// UC-14: the gate uses the real component with the opt-in flag off (default).
 		this.service = new ConnectionService(this.connections, this.accounts, this.secrets, this.platforms,
-				this.notifications);
+				this.notifications, new ExperimentalPlatforms(new ExperimentalProperties(false)));
 		given(this.connections.save(any(Connection.class))).willAnswer((inv) -> inv.getArgument(0));
 		given(this.secrets.open(anyString(), any(SecretCipher.SealedSecret.class))).willReturn("token");
 		given(this.platforms.find("telegram")).willReturn(Optional.of(this.probe));
@@ -125,6 +128,55 @@ class ConnectionServiceTest {
 
 		verify(this.connections, never()).save(any());
 		verifyNoInteractions(this.notifications);
+	}
+
+	@Test
+	void connectRejectsWhatsAppBusinessPermanentlyBeforeAnyProbeOrSave() {
+		assertThatThrownBy(() -> this.service.connect(WS, "private", "whatsapp-business", "pasted", "Biz", "secret"))
+			.isInstanceOf(ProbeException.class)
+			.hasMessageContaining("WhatsApp Business is not supported")
+			.hasMessageContaining("ADR-010");
+
+		verify(this.platforms, never()).find(anyString());
+		verify(this.connections, never()).save(any());
+		verifyNoInteractions(this.probe);
+	}
+
+	@Test
+	void connectRejectsExperimentalTargetWhileOptInDisabled() {
+		assertThatThrownBy(() -> this.service.connect(WS, "private", "signal", "pasted", "Sig", "secret"))
+			.isInstanceOf(ProbeException.class)
+			.hasMessageContaining("disabled");
+
+		verify(this.platforms, never()).find(anyString());
+		verify(this.connections, never()).save(any());
+		verifyNoInteractions(this.probe);
+	}
+
+	@Test
+	void connectRejectsExperimentalTargetWithoutFeasibilityRecordEvenWhenEnabled() {
+		ConnectionService enabled = new ConnectionService(this.connections, this.accounts, this.secrets, this.platforms,
+				this.notifications, new ExperimentalPlatforms(new ExperimentalProperties(true)));
+
+		assertThatThrownBy(() -> enabled.connect(WS, "private", "whatsapp-status", "pasted", "Status", "secret"))
+			.isInstanceOf(ProbeException.class)
+			.hasMessageContaining("feasibility");
+
+		verify(this.platforms, never()).find(anyString());
+		verify(this.connections, never()).save(any());
+		verifyNoInteractions(this.probe);
+	}
+
+	@Test
+	void addDestinationOnExperimentalConnectionFailsClosedWithoutSave() {
+		Connection signal = new Connection(7L, WS, "signal", "pasted", "+41791234567", "Signal", "cipher", "nonce",
+				"key-1", "OK", NOW, true, NOW, NOW);
+		given(this.connections.findByIdAndWorkspaceId(7L, WS)).willReturn(Optional.of(signal));
+
+		assertThatThrownBy(() -> this.service.addDestination(WS, 7L, "message", "acct-1", null, "My signal"))
+			.isInstanceOf(ProbeException.class);
+
+		verify(this.accounts, never()).save(any());
 	}
 
 	private String savedHealth() {
