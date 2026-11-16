@@ -12,6 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+import com.patbaumgartner.socialcrossposter.notify.NotificationChannelRepository;
+import com.patbaumgartner.socialcrossposter.notify.NotificationDeliveryRepository;
 import com.patbaumgartner.socialcrossposter.notify.NotificationEventRepository;
 import com.patbaumgartner.socialcrossposter.media.MediaAssetRepository;
 import com.patbaumgartner.socialcrossposter.media.RevisionMediaRepository;
@@ -118,6 +120,12 @@ class PostFlowTest {
 	NotificationEventRepository notificationEvents;
 
 	@Autowired
+	NotificationChannelRepository notificationChannels;
+
+	@Autowired
+	NotificationDeliveryRepository notificationDeliveries;
+
+	@Autowired
 	RevisionMediaRepository revisionMedia;
 
 	@Autowired
@@ -133,6 +141,10 @@ class PostFlowTest {
 		// FK-safe order before and after each test so other test classes (accounts,
 		// contacts) are never affected by leftover post rows.
 		// notification_event references publication/delivery/schedule, so it goes first.
+		// notification_delivery references notification_event/notification_channel —
+		// delete outbox rows and channels first (FK-safe order, UC-12 second slice).
+		this.notificationDeliveries.deleteAll();
+		this.notificationChannels.deleteAll();
 		this.notificationEvents.deleteAll();
 		// revision_media references post_revision/media_asset — delete links, then
 		// assets.

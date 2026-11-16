@@ -35,6 +35,8 @@ import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestinationRepository;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverrideRepository;
 import com.patbaumgartner.socialcrossposter.notify.NotificationEvent;
+import com.patbaumgartner.socialcrossposter.notify.NotificationChannelRepository;
+import com.patbaumgartner.socialcrossposter.notify.NotificationDeliveryRepository;
 import com.patbaumgartner.socialcrossposter.notify.NotificationEventRepository;
 import com.patbaumgartner.socialcrossposter.notify.NotificationService;
 import com.patbaumgartner.socialcrossposter.platform.PublishContext;
@@ -150,6 +152,12 @@ class NotificationFlowTest {
 	NotificationEventRepository notificationEvents;
 
 	@Autowired
+	NotificationChannelRepository notificationChannels;
+
+	@Autowired
+	NotificationDeliveryRepository notificationDeliveries;
+
+	@Autowired
 	RevisionMediaRepository revisionMedia;
 
 	@Autowired
@@ -164,6 +172,10 @@ class NotificationFlowTest {
 	@BeforeEach
 	@AfterEach
 	void resetState() {
+		// notification_delivery references notification_event/notification_channel —
+		// delete outbox rows and channels first (FK-safe order, UC-12 second slice).
+		this.notificationDeliveries.deleteAll();
+		this.notificationChannels.deleteAll();
 		this.notificationEvents.deleteAll();
 		// revision_media references post_revision/media_asset — delete links, then
 		// assets.

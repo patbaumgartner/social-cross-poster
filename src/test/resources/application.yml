@@ -35,3 +35,14 @@ app:
   # UC-13 media library writes to a temp dir in tests.
   media:
     dir: ${java.io.tmpdir}/scp-test-media
+  # UC-12 second slice: the webhook outbox worker is off in tests (runDue is
+  # driven manually), and 127.0.0.1 is allow-listed so tests can run a local
+  # HttpServer as a webhook receiver (plain http only for allow-listed hosts).
+  notify:
+    worker-enabled: false
+    max-attempts: 3
+    backoff-base-seconds: 1
+    backoff-cap-seconds: 5
+    connect-timeout-ms: 2000
+    read-timeout-ms: 2000
+    allowed-internal-hosts: ["127.0.0.1"]
