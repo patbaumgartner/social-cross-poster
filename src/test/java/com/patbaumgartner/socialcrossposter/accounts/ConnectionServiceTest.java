@@ -1,6 +1,8 @@
 package com.patbaumgartner.socialcrossposter.accounts;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -62,9 +64,11 @@ class ConnectionServiceTest {
 		this.platforms = mock(PlatformRegistry.class);
 		this.notifications = mock(NotificationService.class);
 		this.probe = mock(PlatformProbe.class);
-		// UC-14: the gate uses the real component with the opt-in flag off (default).
+		// UC-14: the gate uses the real component with the opt-in flag off (default)
+		// and an empty registry (no experimental bridge adapter is wired in tests).
 		this.service = new ConnectionService(this.connections, this.accounts, this.secrets, this.platforms,
-				this.notifications, new ExperimentalPlatforms(new ExperimentalProperties(false)));
+				this.notifications, new ExperimentalPlatforms(new ExperimentalProperties(false, Map.of()),
+						new PlatformRegistry(List.of())));
 		given(this.connections.save(any(Connection.class))).willAnswer((inv) -> inv.getArgument(0));
 		given(this.secrets.open(anyString(), any(SecretCipher.SealedSecret.class))).willReturn("token");
 		given(this.platforms.find("telegram")).willReturn(Optional.of(this.probe));
@@ -156,11 +160,28 @@ class ConnectionServiceTest {
 	@Test
 	void connectRejectsExperimentalTargetWithoutFeasibilityRecordEvenWhenEnabled() {
 		ConnectionService enabled = new ConnectionService(this.connections, this.accounts, this.secrets, this.platforms,
-				this.notifications, new ExperimentalPlatforms(new ExperimentalProperties(true)));
+				this.notifications,
+				new ExperimentalPlatforms(new ExperimentalProperties(true, Map.of()), new PlatformRegistry(List.of())));
 
 		assertThatThrownBy(() -> enabled.connect(WS, "private", "whatsapp-status", "pasted", "Status", "secret"))
 			.isInstanceOf(ProbeException.class)
 			.hasMessageContaining("feasibility");
+
+		verify(this.platforms, never()).find(anyString());
+		verify(this.connections, never()).save(any());
+		verifyNoInteractions(this.probe);
+	}
+
+	@Test
+	void connectRejectsExperimentalTargetWithRecordButNoWiredBridgeAdapter() {
+		ConnectionService recorded = new ConnectionService(this.connections, this.accounts, this.secrets,
+				this.platforms, this.notifications,
+				new ExperimentalPlatforms(new ExperimentalProperties(true, Map.of("signal", "2026-11-17 test record")),
+						new PlatformRegistry(List.of())));
+
+		assertThatThrownBy(() -> recorded.connect(WS, "private", "signal", "pasted", "Sig", "secret"))
+			.isInstanceOf(ProbeException.class)
+			.hasMessageContaining("no bridge adapter");
 
 		verify(this.platforms, never()).find(anyString());
 		verify(this.connections, never()).save(any());

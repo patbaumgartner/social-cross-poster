@@ -18,7 +18,7 @@
 | Personal WhatsApp Status | Unofficial bridge not yet selected | Optional P4 feasibility only; no promised REST contract or Status support |
 | Signal | Unofficial signal-cli-based bridge | Optional P4; messages and stories are separate capabilities |
 
-**WhatsApp Business is excluded:** no Cloud API, Business OAuth/onboarding, Business messaging, or Business credential type. No audience-substitution or bulk messaging workflow. This boundary is enforced in code since 2026-11-17 (UC-14 first slice): `ExperimentalPlatforms` rejects every `whatsapp*business*` key outright and gates `whatsapp-status`/`signal` behind `APP_EXPERIMENTAL_ENABLED` plus a passed ADR-010 feasibility record, so no Business mode can ever be offered as a substitute.
+**WhatsApp Business is excluded:** no Cloud API, Business OAuth/onboarding, Business messaging, or Business credential type. No audience-substitution or bulk messaging workflow. This boundary is enforced in code since 2026-11-17 (UC-14 slices 1–3): `ExperimentalPlatforms` rejects every `whatsapp*business*` key outright and gates `whatsapp-status`/`signal` behind `APP_EXPERIMENTAL_ENABLED` plus a dated feasibility record (`APP_EXPERIMENTAL_FEASIBILITY_<PLATFORM>`, validated fail-closed at startup) plus a wired bridge adapter, so no Business mode can ever be offered as a substitute and no unproven target is ever shown available.
 
 Initial-release support must include both LinkedIn destination kinds alongside Bluesky, Mastodon and Telegram. Every publication stays inside its owning workspace/account set.
 
