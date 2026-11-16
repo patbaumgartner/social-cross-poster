@@ -87,16 +87,18 @@
         Business messaging, or Business credentials.</p>
       <table>
         <thead>
-          <tr><th>Target</th><th>Label</th><th>Availability</th></tr>
+          <tr><th>Target</th><th>Label</th><th>Candidate kinds</th><th>Availability</th></tr>
         </thead>
         <tbody>
           <tr th:each="t : ${experimentalTargets}">
             <td th:text="${t.platform}">signal</td>
             <td th:text="${experimentalLabel}">experimental / unofficial</td>
+            <td th:text="${t.kinds.isEmpty()} ? '—' : ${#strings.listJoin(t.kinds, ', ')}">message</td>
             <td th:text="${t.available} ? 'available — opt in through a locally protected setup path' : ${t.reason}">unavailable</td>
           </tr>
         </tbody>
       </table>
+      <p>Signal story publishing is a separate capability and is not listed until its own probe passes — a story target is blocked, never sent as a chat message instead. WhatsApp Status candidates use the <code>status</code> kind only.</p>
     </section>
 
     <section class="card">

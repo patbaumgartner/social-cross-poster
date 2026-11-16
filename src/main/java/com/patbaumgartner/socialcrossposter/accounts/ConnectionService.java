@@ -184,9 +184,10 @@ public class ConnectionService {
 		Connection connection = this.connections.findByIdAndWorkspaceId(connectionId, workspaceId)
 			.orElseThrow(() -> new ProbeException("Unknown connection for this workspace."));
 		// UC-14 / ADR-010: a destination may only be added while its platform is
-		// connectable — an experimental bridge that lost its feasibility standing
-		// blocks dependent destinations instead of silently substituting (ADR-010).
-		this.experimentals.requireConnectable(connection.platform());
+		// connectable and the kind is verified for it — an experimental bridge that
+		// lost its feasibility standing blocks dependent destinations, and Signal
+		// story stays blocked instead of falling back to a chat message.
+		this.experimentals.requireDestinationKind(connection.platform(), kind);
 		if (!StringUtils.hasText(providerAccountId) || !StringUtils.hasText(label)) {
 			throw new ProbeException("Destination requires a provider account id and a label.");
 		}

@@ -179,6 +179,20 @@ class ConnectionServiceTest {
 		verify(this.accounts, never()).save(any());
 	}
 
+	@Test
+	void addStoryDestinationOnSignalConnectionFailsClosedToo() {
+		Connection signal = new Connection(7L, WS, "signal", "pasted", "+41791234567", "Signal", "cipher", "nonce",
+				"key-1", "OK", NOW, true, NOW, NOW);
+		given(this.connections.findByIdAndWorkspaceId(7L, WS)).willReturn(Optional.of(signal));
+
+		// UC-14 alternative flow 3: story is a separate capability; with the gate
+		// closed the whole target fails closed — never a message fallback.
+		assertThatThrownBy(() -> this.service.addDestination(WS, 7L, "story", "acct-1", null, "My story"))
+			.isInstanceOf(ProbeException.class);
+
+		verify(this.accounts, never()).save(any());
+	}
+
 	private String savedHealth() {
 		ArgumentCaptor<Connection> captor = ArgumentCaptor.forClass(Connection.class);
 		verify(this.connections).save(captor.capture());
