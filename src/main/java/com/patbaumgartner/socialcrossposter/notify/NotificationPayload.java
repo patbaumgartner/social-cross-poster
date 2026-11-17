@@ -12,6 +12,13 @@ public record NotificationPayload(Long eventId, String eventKey, Long workspaceI
 		String category, String summary, Long publicationId, Long deliveryId, Long scheduleId, Long connectionId,
 		OffsetDateTime occurredAt) {
 
+	/** Copy with a different summary (used for the opt-in snippet enrichment). */
+	public NotificationPayload withSummary(String newSummary) {
+		return new NotificationPayload(this.eventId, this.eventKey, this.workspaceId, this.workspaceLabel,
+				this.category, newSummary, this.publicationId, this.deliveryId, this.scheduleId, this.connectionId,
+				this.occurredAt);
+	}
+
 	/** Serializes the payload to compact JSON with proper escaping. */
 	public String toJson() {
 		StringBuilder json = new StringBuilder(256);

@@ -29,7 +29,8 @@ import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
  * recent outbox rows (UC-12 second slice). UC-15 step 1: the owner creates a new
  * workspace from the picker; validation failures fail closed and persist nothing. UC-15
  * step 2: the owner edits an existing workspace's label/color/timezone, profile
- * (languages/brand voice) and protected event facts/links on /w/{slug}/settings — the
+ * (languages/brand voice) and protected event facts/links on /w/{slug}/settings, and the
+ * notification payload default (snippet opt-in) on /w/{slug}/settings/notifications — the
  * slug is immutable (ADR-013).
  */
 @Controller
@@ -111,6 +112,30 @@ public class WorkspaceController {
 			Workspace updated = this.workspaces.updateSettings(slug, label, color, timezone, languages, brandVoice,
 					eventFacts, eventLinks);
 			redirect.addFlashAttribute("notice", "Settings for '" + updated.label() + "' saved.");
+			return "redirect:/w/" + updated.slug() + "/dashboard";
+		}
+		catch (WorkspaceException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+			return "redirect:/w/" + slug + "/settings";
+		}
+	}
+
+	/**
+	 * UC-15 step 2 (notification defaults) / UC-12 alternative flow 4: toggles the
+	 * workspace's snippet opt-in for external notification payloads (checkbox: present =
+	 * opted in, absent = redacted default). The slug is immutable and never read from the
+	 * form; an unknown slug returns to the picker without touching another workspace.
+	 */
+	@PostMapping("/w/{slug}/settings/notifications")
+	public String updateNotificationDefaults(@PathVariable String slug,
+			@RequestParam(required = false) String notifySnippets, RedirectAttributes redirect) {
+		if (this.workspaces.findBySlug(slug).isEmpty()) {
+			return "redirect:/";
+		}
+		try {
+			boolean optedIn = "on".equalsIgnoreCase(notifySnippets) || "true".equalsIgnoreCase(notifySnippets);
+			Workspace updated = this.workspaces.updateNotificationDefaults(slug, optedIn);
+			redirect.addFlashAttribute("notice", "Notification defaults for '" + updated.label() + "' saved.");
 			return "redirect:/w/" + updated.slug() + "/dashboard";
 		}
 		catch (WorkspaceException ex) {

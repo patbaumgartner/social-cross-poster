@@ -43,6 +43,17 @@
       </label>
       <button type="submit">Save settings</button>
     </form>
+    <form method="post" th:action="@{/w/{slug}/settings/notifications(slug=${workspace.slug})}" class="workspace-notifications">
+      <fieldset>
+        <legend>Notification defaults</legend>
+        <label>
+          <input type="checkbox" name="notifySnippets" value="on" th:checked="${workspace.notifySnippets}">
+          Include a short text snippet of the published post in external notifications (webhook/SMTP)
+        </label>
+        <p>Off by default: external payloads are redacted and never contain post text, images, prompts, tokens or raw provider bodies. Opt in per workspace to also include a bounded snippet (max 200 characters) of the approved post text.</p>
+        <button type="submit">Save notification defaults</button>
+      </fieldset>
+    </form>
     <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Back to dashboard</a></p>
   </main>
 </body>
