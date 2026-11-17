@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Settings')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — settings'">Settings</h1>
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p class="notice" role="status" th:if="${notice}" th:text="${notice}">Notice</p>
+    <p>Workspace slug <strong th:text="${workspace.slug}">slug</strong> is immutable — it is part of every URL of this workspace and cannot be changed here.</p>
+    <form method="post" th:action="@{/w/{slug}/settings(slug=${workspace.slug})}" class="workspace-settings">
+      <label>Label
+        <input type="text" name="label" required maxlength="120" th:value="${workspace.label}" placeholder="My Brand">
+      </label>
+      <label>Color
+        <select name="color">
+          <option value="#3b82f6" th:selected="${workspace.color == '#3b82f6'}">Blue #3b82f6</option>
+          <option value="#2563eb" th:selected="${workspace.color == '#2563eb'}">Deep blue #2563eb</option>
+          <option value="#059669" th:selected="${workspace.color == '#059669'}">Green #059669</option>
+          <option value="#7c3aed" th:selected="${workspace.color == '#7c3aed'}">Violet #7c3aed</option>
+          <option value="#dc2626" th:selected="${workspace.color == '#dc2626'}">Red #dc2626</option>
+          <option value="#ea580c" th:selected="${workspace.color == '#ea580c'}">Orange #ea580c</option>
+          <option value="#6b7280" th:selected="${workspace.color == '#6b7280'}">Gray #6b7280</option>
+        </select>
+      </label>
+      <label>Timezone
+        <input type="text" name="timezone" maxlength="64" th:value="${workspace.timezone}" placeholder="Europe/Zurich">
+      </label>
+      <button type="submit">Save settings</button>
+    </form>
+    <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Back to dashboard</a></p>
+  </main>
+</body>
+</html>

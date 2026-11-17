@@ -1,5 +1,6 @@
 package com.patbaumgartner.socialcrossposter.workspace;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -16,9 +17,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Unit tests for {@link WorkspaceService#create} (UC-15 step 1, ADR-013): fail-closed
+ * Unit tests for {@link WorkspaceService#create} and
+ * {@link WorkspaceService#updateSettings} (UC-15 steps 1-2, ADR-013): fail-closed
  * validation of slug/label/color/timezone, duplicate-slug rejection, defaults, and the
- * persisted field mapping. Mocked repository, no Spring context.
+ * persisted field mapping — update keeps the id, slug and created_at of the existing row.
+ * Mocked repository, no Spring context.
  */
 class WorkspaceServiceTest {
 
@@ -108,6 +111,68 @@ class WorkspaceServiceTest {
 	@Test
 	void unknownTimezoneFailsClosed() {
 		assertThatThrownBy(() -> this.service.create("acme", "Acme", null, "Mars/Olympus"))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("timezone");
+		verify(this.repository, never()).save(any());
+	}
+
+	@Test
+	void updateSettingsKeepsSlugIdAndCreatedAtAndTrimsFields() {
+		OffsetDateTime createdAt = OffsetDateTime.parse("2026-11-17T10:00:00Z");
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", createdAt)));
+
+		Workspace updated = this.service.updateSettings(" acme ", " Acme AG ", "#A1B2C3", " Europe/Zurich ");
+
+		ArgumentCaptor<Workspace> captor = ArgumentCaptor.forClass(Workspace.class);
+		verify(this.repository).save(captor.capture());
+		Workspace saved = captor.getValue();
+		assertThat(saved.id()).isEqualTo(7L);
+		assertThat(saved.slug()).isEqualTo("acme");
+		assertThat(saved.label()).isEqualTo("Acme AG");
+		assertThat(saved.color()).isEqualTo("#A1B2C3");
+		assertThat(saved.timezone()).isEqualTo("Europe/Zurich");
+		assertThat(saved.createdAt()).isEqualTo(createdAt);
+		assertThat(updated).isSameAs(saved);
+	}
+
+	@Test
+	void updateSettingsAppliesDefaultsWhenColorAndTimezoneOmitted() {
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", null)));
+
+		Workspace updated = this.service.updateSettings("acme", "Acme", null, "  ");
+
+		assertThat(updated.color()).isEqualTo("#3b82f6");
+		assertThat(updated.timezone()).isEqualTo("Europe/Zurich");
+	}
+
+	@Test
+	void updateSettingsUnknownOrBlankSlugFailsClosedAndSavesNothing() {
+		assertThatThrownBy(() -> this.service.updateSettings("ghost", "X", null, null))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Unknown workspace");
+		assertThatThrownBy(() -> this.service.updateSettings("   ", "X", null, null))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Unknown workspace");
+		verify(this.repository, never()).save(any());
+	}
+
+	@Test
+	void updateSettingsInvalidFieldsFailClosedAndSaveNothing() {
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", null)));
+
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "   ", null, null))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Label");
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "x".repeat(121), null, null))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Label");
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "Acme", "red", null))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Color");
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "Acme", null, "Mars/Olympus"))
 			.isInstanceOf(WorkspaceException.class)
 			.hasMessageContaining("timezone");
 		verify(this.repository, never()).save(any());
