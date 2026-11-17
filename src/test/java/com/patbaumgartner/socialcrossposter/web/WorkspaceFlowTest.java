@@ -244,7 +244,9 @@ class WorkspaceFlowTest {
 				.param("color", "#059669")
 				.param("timezone", "Europe/Berlin")
 				.param("languages", "de, en, fr-CH")
-				.param("brandVoice", "Friendly, concise."))
+				.param("brandVoice", "Friendly, concise.")
+				.param("eventFacts", "Voxxed Days Zurich 2026, June 11-12.")
+				.param("eventLinks", "https://voxxeddays.com/zurich, https://example.com/tickets"))
 			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrl("/w/acme/dashboard"))
 			.andExpect(flash().attribute("notice", containsString("Acme AG")));
@@ -258,6 +260,8 @@ class WorkspaceFlowTest {
 		assertThat(after.timezone()).isEqualTo("Europe/Berlin");
 		assertThat(after.languages()).isEqualTo("de,en,fr-CH");
 		assertThat(after.brandVoice()).isEqualTo("Friendly, concise.");
+		assertThat(after.eventFacts()).isEqualTo("Voxxed Days Zurich 2026, June 11-12.");
+		assertThat(after.eventLinks()).isEqualTo("https://voxxeddays.com/zurich,https://example.com/tickets");
 
 		// The dashboard shows the new label, and the settings form pre-fills the new
 		// values.
@@ -268,7 +272,30 @@ class WorkspaceFlowTest {
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("Acme AG")))
 			.andExpect(content().string(containsString("Europe/Berlin")))
-			.andExpect(content().string(containsString("de,en,fr-CH")));
+			.andExpect(content().string(containsString("de,en,fr-CH")))
+			.andExpect(content().string(containsString("https://voxxeddays.com/zurich")));
+	}
+
+	@Test
+	void updateSettingsInvalidEventLinksShowsErrorAndLeavesRowUnchanged() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc
+			.perform(post("/workspaces").with(csrf()).session(session).param("slug", "acme").param("label", "Acme"))
+			.andExpect(status().is3xxRedirection());
+
+		this.mockMvc
+			.perform(post("/w/acme/settings").with(csrf())
+				.session(session)
+				.param("label", "Acme")
+				.param("eventLinks", "not-a-url"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/settings"))
+			.andExpect(flash().attribute("error", containsString("link")));
+
+		Workspace row = this.workspaces.findBySlug("acme").orElseThrow();
+		assertThat(row.label()).isEqualTo("Acme");
+		assertThat(row.eventFacts()).isNull();
+		assertThat(row.eventLinks()).isNull();
 	}
 
 	@Test

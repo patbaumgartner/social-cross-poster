@@ -1,5 +1,6 @@
 package com.patbaumgartner.socialcrossposter.workspace;
 
+import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -14,8 +15,9 @@ import org.springframework.util.StringUtils;
  * missing context fails closed (ADR-013). Creating a workspace validates the slug, label,
  * color and timezone fail-closed and rejects duplicate slugs — the slug becomes part of
  * every workspace URL, so it is restricted to lowercase URL-safe characters and immutable
- * afterwards. Updating settings validates label/color/timezone with the same rules and
- * fails closed on an unknown slug.
+ * afterwards. Updating settings validates label/color/timezone plus the profile
+ * (languages, brand voice) and the protected event anchors (event facts, event links)
+ * with the same rules and fails closed on an unknown slug.
  */
 @Service
 public class WorkspaceService {
@@ -35,6 +37,12 @@ public class WorkspaceService {
 	private static final int MAX_LANGUAGES_LENGTH = 255;
 
 	private static final int MAX_BRAND_VOICE_LENGTH = 2000;
+
+	private static final int MAX_EVENT_FACTS_LENGTH = 2000;
+
+	private static final int MAX_EVENT_LINKS = 10;
+
+	private static final int MAX_EVENT_LINKS_LENGTH = 2000;
 
 	private final WorkspaceRepository repository;
 
@@ -69,25 +77,26 @@ public class WorkspaceService {
 			throw new WorkspaceException("A workspace with slug '" + normalizedSlug + "' already exists.");
 		}
 		return this.repository.save(new Workspace(null, normalizedSlug, validateLabel(label), validateColor(color),
-				validateTimezone(timezone), OffsetDateTime.now(), null, null));
+				validateTimezone(timezone), OffsetDateTime.now(), null, null, null, null));
 	}
 
 	/**
-	 * UC-15 step 2: updates the label, color, timezone and profile (languages csv, brand
-	 * voice) of an existing workspace. The slug is immutable (it is part of every
-	 * workspace URL) and never changes here; the id and created_at of the existing row
-	 * are kept. Fails closed (persists nothing) on an unknown or blank slug and on
-	 * invalid label/color/timezone/languages/brand voice.
+	 * UC-15 step 2: updates the label, color, timezone, profile (languages csv, brand
+	 * voice) and protected event anchors (event facts text, event links csv) of an
+	 * existing workspace. The slug is immutable (it is part of every workspace URL) and
+	 * never changes here; the id and created_at of the existing row are kept. Fails
+	 * closed (persists nothing) on an unknown or blank slug and on invalid
+	 * label/color/timezone/languages/brand voice/event facts/event links.
 	 * @throws WorkspaceException with a sanitized, user-presentable message
 	 */
 	public Workspace updateSettings(String slug, String label, String color, String timezone, String languages,
-			String brandVoice) {
+			String brandVoice, String eventFacts, String eventLinks) {
 		String normalizedSlug = slug == null ? "" : slug.trim();
 		Workspace existing = this.repository.findBySlug(normalizedSlug)
 			.orElseThrow(() -> new WorkspaceException("Unknown workspace."));
 		return this.repository.save(new Workspace(existing.id(), existing.slug(), validateLabel(label),
 				validateColor(color), validateTimezone(timezone), existing.createdAt(), validateLanguages(languages),
-				validateBrandVoice(brandVoice)));
+				validateBrandVoice(brandVoice), validateEventFacts(eventFacts), validateEventLinks(eventLinks)));
 	}
 
 	private static String validateLabel(String label) {
@@ -158,6 +167,68 @@ public class WorkspaceService {
 			throw new WorkspaceException("Brand voice must be at most " + MAX_BRAND_VOICE_LENGTH + " characters.");
 		}
 		return trimmed;
+	}
+
+	/**
+	 * Event facts are optional free text (max 2000 chars) with the workspace's factual
+	 * anchors; blank stores NULL. They are protected: only an explicit owner edit changes
+	 * them (UC-16 AI assistance anchors on them).
+	 */
+	private static String validateEventFacts(String eventFacts) {
+		if (!StringUtils.hasText(eventFacts)) {
+			return null;
+		}
+		String trimmed = eventFacts.trim();
+		if (trimmed.length() > MAX_EVENT_FACTS_LENGTH) {
+			throw new WorkspaceException("Event facts must be at most " + MAX_EVENT_FACTS_LENGTH + " characters.");
+		}
+		return trimmed;
+	}
+
+	/**
+	 * Event links are an optional csv of absolute http(s) URLs; blank stores NULL. Each
+	 * link must have an http/https scheme and a host, at most 10 links and 2000
+	 * characters in total.
+	 */
+	private static String validateEventLinks(String eventLinks) {
+		if (!StringUtils.hasText(eventLinks)) {
+			return null;
+		}
+		String[] links = eventLinks.split(",");
+		if (links.length > MAX_EVENT_LINKS) {
+			throw new WorkspaceException(
+					"At most " + MAX_EVENT_LINKS + " event links, comma-separated (e.g. 'https://…').");
+		}
+		StringBuilder normalized = new StringBuilder();
+		for (String link : links) {
+			String trimmed = link.trim();
+			if (!isHttpUrl(trimmed)) {
+				throw new WorkspaceException("Each event link must be an absolute http(s) URL like 'https://…'.");
+			}
+			if (normalized.length() > 0) {
+				normalized.append(',');
+			}
+			normalized.append(trimmed);
+		}
+		if (normalized.length() == 0) {
+			return null;
+		}
+		if (normalized.length() > MAX_EVENT_LINKS_LENGTH) {
+			throw new WorkspaceException("Event links must fit into " + MAX_EVENT_LINKS_LENGTH + " characters.");
+		}
+		return normalized.toString();
+	}
+
+	private static boolean isHttpUrl(String value) {
+		try {
+			URI uri = new URI(value);
+			String scheme = uri.getScheme();
+			return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+					&& StringUtils.hasText(uri.getHost());
+		}
+		catch (java.net.URISyntaxException ex) {
+			return false;
+		}
 	}
 
 }

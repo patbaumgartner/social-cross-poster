@@ -28,8 +28,9 @@ import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
  * notification events (UC-12 step 5), newest first, and its webhook channels with the
  * recent outbox rows (UC-12 second slice). UC-15 step 1: the owner creates a new
  * workspace from the picker; validation failures fail closed and persist nothing. UC-15
- * step 2: the owner edits an existing workspace's label/color/timezone on
- * /w/{slug}/settings — the slug is immutable (ADR-013).
+ * step 2: the owner edits an existing workspace's label/color/timezone, profile
+ * (languages/brand voice) and protected event facts/links on /w/{slug}/settings — the
+ * slug is immutable (ADR-013).
  */
 @Controller
 public class WorkspaceController {
@@ -91,21 +92,24 @@ public class WorkspaceController {
 	}
 
 	/**
-	 * UC-15 step 2: save label/color/timezone plus the profile (languages, brand voice).
-	 * The slug is immutable and never read from the form. Validation failures are flashed
-	 * as a sanitized error and the stored row is left unchanged; success flashes a notice
-	 * and returns to the dashboard.
+	 * UC-15 step 2: save label/color/timezone plus the profile (languages, brand voice)
+	 * and the protected event anchors (event facts, event links). The slug is immutable
+	 * and never read from the form. Validation failures are flashed as a sanitized error
+	 * and the stored row is left unchanged; success flashes a notice and returns to the
+	 * dashboard.
 	 */
 	@PostMapping("/w/{slug}/settings")
 	public String updateSettings(@PathVariable String slug, @RequestParam String label,
 			@RequestParam(required = false) String color, @RequestParam(required = false) String timezone,
 			@RequestParam(required = false) String languages, @RequestParam(required = false) String brandVoice,
+			@RequestParam(required = false) String eventFacts, @RequestParam(required = false) String eventLinks,
 			RedirectAttributes redirect) {
 		if (this.workspaces.findBySlug(slug).isEmpty()) {
 			return "redirect:/";
 		}
 		try {
-			Workspace updated = this.workspaces.updateSettings(slug, label, color, timezone, languages, brandVoice);
+			Workspace updated = this.workspaces.updateSettings(slug, label, color, timezone, languages, brandVoice,
+					eventFacts, eventLinks);
 			redirect.addFlashAttribute("notice", "Settings for '" + updated.label() + "' saved.");
 			return "redirect:/w/" + updated.slug() + "/dashboard";
 		}
