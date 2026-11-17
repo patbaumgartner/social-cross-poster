@@ -91,19 +91,21 @@ public class WorkspaceController {
 	}
 
 	/**
-	 * UC-15 step 2: save label/color/timezone. The slug is immutable and never read from
-	 * the form. Validation failures are flashed as a sanitized error and the stored row
-	 * is left unchanged; success flashes a notice and returns to the dashboard.
+	 * UC-15 step 2: save label/color/timezone plus the profile (languages, brand voice).
+	 * The slug is immutable and never read from the form. Validation failures are flashed
+	 * as a sanitized error and the stored row is left unchanged; success flashes a notice
+	 * and returns to the dashboard.
 	 */
 	@PostMapping("/w/{slug}/settings")
 	public String updateSettings(@PathVariable String slug, @RequestParam String label,
 			@RequestParam(required = false) String color, @RequestParam(required = false) String timezone,
+			@RequestParam(required = false) String languages, @RequestParam(required = false) String brandVoice,
 			RedirectAttributes redirect) {
 		if (this.workspaces.findBySlug(slug).isEmpty()) {
 			return "redirect:/";
 		}
 		try {
-			Workspace updated = this.workspaces.updateSettings(slug, label, color, timezone);
+			Workspace updated = this.workspaces.updateSettings(slug, label, color, timezone, languages, brandVoice);
 			redirect.addFlashAttribute("notice", "Settings for '" + updated.label() + "' saved.");
 			return "redirect:/w/" + updated.slug() + "/dashboard";
 		}
