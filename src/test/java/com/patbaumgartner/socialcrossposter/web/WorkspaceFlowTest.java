@@ -1,6 +1,12 @@
 package com.patbaumgartner.socialcrossposter.web;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -25,6 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -379,6 +387,47 @@ class WorkspaceFlowTest {
 		this.mockMvc
 			.perform(
 					post("/w/ghost/settings/notifications").with(csrf()).session(session).param("notifySnippets", "on"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/"));
+	}
+
+	@Test
+	void exportReturnsZipWithManifestTablesAndWorkspaceRow() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc
+			.perform(post("/workspaces").with(csrf()).session(session).param("slug", "acme").param("label", "Acme"))
+			.andExpect(status().is3xxRedirection());
+
+		MvcResult result = this.mockMvc.perform(get("/w/acme/export").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().contentType("application/zip"))
+			.andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
+					containsString("attachment; filename=\"scp-export-acme-")))
+			.andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString(".zip\"")))
+			.andReturn();
+
+		Map<String, byte[]> entries = new LinkedHashMap<>();
+		try (ZipInputStream zip = new ZipInputStream(
+				new ByteArrayInputStream(result.getResponse().getContentAsByteArray()))) {
+			ZipEntry entry;
+			while ((entry = zip.getNextEntry()) != null) {
+				entries.put(entry.getName(), zip.readAllBytes());
+			}
+		}
+		assertThat(entries).containsKeys("manifest.json", "tables/workspace.json", "tables/connection.json",
+				"tables/post.json");
+		String manifest = new String(entries.get("manifest.json"), StandardCharsets.UTF_8);
+		assertThat(manifest).contains("\"slug\":\"acme\"").contains("\"schemaVersion\":\"18\"");
+		assertThat(new String(entries.get("tables/workspace.json"), StandardCharsets.UTF_8)).contains("acme");
+	}
+
+	@Test
+	void exportRequiresLoginAndUnknownSlugRedirectsToPicker() throws Exception {
+		this.mockMvc.perform(get("/w/acme/export"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/login"));
+		MockHttpSession session = login();
+		this.mockMvc.perform(get("/w/ghost/export").session(session))
 			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrl("/"));
 	}
