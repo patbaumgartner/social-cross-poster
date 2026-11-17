@@ -352,6 +352,73 @@ class PublicationServiceTest {
 	}
 
 	@Test
+	void executeDeliveryOnUnhealthyExperimentalBridgeIsBlockedBeforeDecryption() {
+		AccountDestination signalDest = new AccountDestination(ACCOUNT, WS, CONN, "signal", "message", "+41791234567",
+				null, "Signal chat", true, false, NOW, NOW);
+		Connection unhealthyBridge = new Connection(CONN, WS, "signal", "bridge", "+41791234567", "Signal", "cipher",
+				"nonce", "test-v1", "ERROR", NOW, true, NOW, NOW);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS))
+			.willReturn(Optional.of(deliveryWithState(PublicationService.D_PENDING, "signal")));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.accounts.findByIdAndWorkspaceId(ACCOUNT, WS)).willReturn(Optional.of(signalDest));
+		given(this.connections.findByIdAndWorkspaceId(CONN, WS)).willReturn(Optional.of(unhealthyBridge));
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_NEEDS_REVIEW);
+		assertThat(result.externalRef()).isNull();
+		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "authorize".equals(a.stage())
+				&& "BLOCKED".equals(a.outcome()) && a.detail() != null && a.detail().contains("signal")
+				&& a.detail().contains("ERROR") && a.detail().contains("ADR-010") && a.externalRef() == null));
+		verify(this.publisher, never()).publish(any());
+		verifyNoInteractions(this.secrets);
+	}
+
+	@Test
+	void executeDeliveryOnHealthyExperimentalBridgePublishes() {
+		AccountDestination signalDest = new AccountDestination(ACCOUNT, WS, CONN, "signal", "message", "+41791234567",
+				null, "Signal chat", true, false, NOW, NOW);
+		Connection healthyBridge = new Connection(CONN, WS, "signal", "bridge", "+41791234567", "Signal", "cipher",
+				"nonce", "test-v1", "OK", NOW, true, NOW, NOW);
+		PlatformPublisher signalPublisher = mock(PlatformPublisher.class);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS))
+			.willReturn(Optional.of(deliveryWithState(PublicationService.D_PENDING, "signal")));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.accounts.findByIdAndWorkspaceId(ACCOUNT, WS)).willReturn(Optional.of(signalDest));
+		given(this.connections.findByIdAndWorkspaceId(CONN, WS)).willReturn(Optional.of(healthyBridge));
+		given(this.secrets.open(eq(SecretCipher.associatedData("private", "signal", "+41791234567")),
+				any(SecretCipher.SealedSecret.class)))
+			.willReturn("signal-token");
+		given(this.publishers.find("signal")).willReturn(Optional.of(signalPublisher));
+		given(signalPublisher.publish(any(PublishContext.class))).willReturn(PublishResult.success("signal:msg:1"));
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_SUCCESS);
+		assertThat(result.externalRef()).isEqualTo("signal:msg:1");
+		verify(signalPublisher).publish(any(PublishContext.class));
+		verify(this.attempts).save(argThat((DeliveryAttempt a) -> "send".equals(a.stage())
+				&& "SUCCESS".equals(a.outcome()) && "signal:msg:1".equals(a.externalRef())));
+	}
+
+	@Test
+	void executeDeliveryOnOfficialPlatformIgnoresBridgeHealth() {
+		Connection errorConn = new Connection(CONN, WS, "telegram", "pasted", "@testbot", "Main bot", "cipher", "nonce",
+				"test-v1", "ERROR", NOW, true, NOW, NOW);
+		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(pendingDelivery()));
+		given(this.attempts.findTopByDeliveryIdOrderByAttemptNoDesc(DELIVERY)).willReturn(Optional.empty());
+		given(this.connections.findByIdAndWorkspaceId(CONN, WS)).willReturn(Optional.of(errorConn));
+		given(this.publisher.publish(any(PublishContext.class)))
+			.willReturn(PublishResult.success("telegram:message:42"));
+
+		Delivery result = this.service.executeDelivery(WS, "private", DELIVERY);
+
+		assertThat(result.state()).isEqualTo(PublicationService.D_SUCCESS);
+		assertThat(result.externalRef()).isEqualTo("telegram:message:42");
+		verify(this.publisher).publish(any(PublishContext.class));
+	}
+
+	@Test
 	void executeDeliverySkipsNonPendingDeliveries() {
 		Delivery done = delivery(PublicationService.D_SUCCESS);
 		given(this.deliveries.findByIdAndWorkspaceId(DELIVERY, WS)).willReturn(Optional.of(done));
@@ -710,7 +777,11 @@ class PublicationServiceTest {
 	}
 
 	private Delivery deliveryWithState(String state) {
-		return new Delivery(DELIVERY, WS, PUB, ACCOUNT, "telegram", "News channel", null, "-100123", "hello",
+		return deliveryWithState(state, "telegram");
+	}
+
+	private Delivery deliveryWithState(String state, String platform) {
+		return new Delivery(DELIVERY, WS, PUB, ACCOUNT, platform, "News channel", null, "-100123", "hello",
 				"abc123hash", state, null, NOW, NOW);
 	}
 

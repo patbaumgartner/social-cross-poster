@@ -65,8 +65,12 @@
             <td th:text="${s.contentSummary}">summary</td>
             <td><span class="badge" th:text="${s.publication.state}">PUBLISHED</span></td>
             <td>
-              <span th:each="d : ${s.deliveries}" class="badge"
-                    th:text="${d.platform + ' · ' + d.destinationLabel + ': ' + d.state}">dest</span>
+              <span th:each="d : ${s.deliveries}">
+                <span class="badge"
+                      th:text="${d.platform + ' · ' + d.destinationLabel + ': ' + d.state}">dest</span>
+                <small th:if="${experimentalPlatforms.contains(d.platform)}"
+                       th:text="${experimentalLabel}">experimental / unofficial</small>
+              </span>
             </td>
             <td class="actions">
               <a th:href="@{/w/{slug}/history/{id}(slug=${workspace.slug},id=${s.publication.id})}">Details</a>

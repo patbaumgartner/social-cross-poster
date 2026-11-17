@@ -45,6 +45,7 @@ import com.patbaumgartner.socialcrossposter.publish.PublicationRepository;
 import com.patbaumgartner.socialcrossposter.publish.PublicationService;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
@@ -277,6 +278,41 @@ class HistoryFlowTest {
 	}
 
 	@Test
+	void experimentalDeliveriesCarryPermanentLabelOnListAndDetail() throws Exception {
+		MockHttpSession session = login();
+		AccountDestination telegram = seedAccount("private", "@testbot", "-1001234567890", "News channel");
+		AccountDestination signal = seedAccount("private", "signal", "message", "+41791234567", "+41791234567",
+				"Signal chat");
+		seedPublication(telegram, "News channel", "Telegram post", "key-tg", PublicationService.P_PUBLISHED,
+				"tg payload", PublicationService.D_SUCCESS, "telegram:message:1");
+		Seed signalSeed = seedPublication(signal, "Signal chat", "Signal post", "key-sig",
+				PublicationService.P_PUBLISHED, "signal payload", PublicationService.D_SUCCESS, "signal:msg:1");
+
+		// UC-14: the permanent "experimental / unofficial" label renders next to the
+		// signal delivery on the list — and only there (the telegram row has none).
+		this.mockMvc.perform(get("/w/private/history").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Signal post")))
+			.andExpect(content().string(containsString("experimental / unofficial")))
+			.andExpect((MvcResult r) -> assertThat(occurrences(r, "experimental / unofficial")).isEqualTo(1));
+		this.mockMvc.perform(get("/w/private/history/" + signalSeed.publicationId).session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Signal post")))
+			.andExpect((MvcResult r) -> assertThat(occurrences(r, "experimental / unofficial")).isEqualTo(1));
+	}
+
+	private static int occurrences(MvcResult result, String needle) throws Exception {
+		String body = result.getResponse().getContentAsString();
+		int count = 0;
+		int idx = body.indexOf(needle);
+		while (idx >= 0) {
+			count++;
+			idx = body.indexOf(needle, idx + needle.length());
+		}
+		return count;
+	}
+
+	@Test
 	void foreignWorkspaceDetailFailsClosed() throws Exception {
 		MockHttpSession session = login();
 		AccountDestination account = seedAccount("private", "@testbot", "-1001234567890", "News channel");
@@ -302,12 +338,17 @@ class HistoryFlowTest {
 	 * workspace+platform+principal).
 	 */
 	private AccountDestination seedAccount(String slug, String principal, String providerAccountId, String label) {
+		return seedAccount(slug, "telegram", "channel", principal, providerAccountId, label);
+	}
+
+	private AccountDestination seedAccount(String slug, String platform, String kind, String principal,
+			String providerAccountId, String label) {
 		Long workspaceId = workspaceId(slug);
 		OffsetDateTime now = OffsetDateTime.now();
-		var sealed = this.secrets.seal(SecretCipher.associatedData(slug, "telegram", principal), "good-token");
-		Connection connection = this.connections.save(new Connection(null, workspaceId, "telegram", "pasted", principal,
+		var sealed = this.secrets.seal(SecretCipher.associatedData(slug, platform, principal), "good-token");
+		Connection connection = this.connections.save(new Connection(null, workspaceId, platform, "pasted", principal,
 				"Main bot", sealed.ciphertext(), sealed.nonce(), sealed.keyId(), "OK", now, true, now, now));
-		return this.accounts.save(new AccountDestination(null, workspaceId, connection.id(), "telegram", "channel",
+		return this.accounts.save(new AccountDestination(null, workspaceId, connection.id(), platform, kind,
 				providerAccountId, null, label, true, false, now, now));
 	}
 
@@ -323,7 +364,7 @@ class HistoryFlowTest {
 		Publication publication = this.publications
 			.save(new Publication(null, workspaceId, post.id(), revision.id(), key, pubState, "hash-" + key, now, now));
 		Delivery delivery = this.deliveries
-			.save(new Delivery(null, workspaceId, publication.id(), account.id(), "telegram", label, null,
+			.save(new Delivery(null, workspaceId, publication.id(), account.id(), account.platform(), label, null,
 					account.providerAccountId(), payload, "phash-" + key, deliveryState, externalRef, now, now));
 		this.attempts.save(new DeliveryAttempt(null, workspaceId, delivery.id(), 1, "send", deliveryState,
 				"redacted detail", externalRef, now));
