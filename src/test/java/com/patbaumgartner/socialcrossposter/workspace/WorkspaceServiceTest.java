@@ -122,7 +122,8 @@ class WorkspaceServiceTest {
 		given(this.repository.findBySlug("acme"))
 			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", createdAt)));
 
-		Workspace updated = this.service.updateSettings(" acme ", " Acme AG ", "#A1B2C3", " Europe/Zurich ");
+		Workspace updated = this.service.updateSettings(" acme ", " Acme AG ", "#A1B2C3", " Europe/Zurich ", null,
+				null);
 
 		ArgumentCaptor<Workspace> captor = ArgumentCaptor.forClass(Workspace.class);
 		verify(this.repository).save(captor.capture());
@@ -141,7 +142,7 @@ class WorkspaceServiceTest {
 		given(this.repository.findBySlug("acme"))
 			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", null)));
 
-		Workspace updated = this.service.updateSettings("acme", "Acme", null, "  ");
+		Workspace updated = this.service.updateSettings("acme", "Acme", null, "  ", null, null);
 
 		assertThat(updated.color()).isEqualTo("#3b82f6");
 		assertThat(updated.timezone()).isEqualTo("Europe/Zurich");
@@ -149,10 +150,10 @@ class WorkspaceServiceTest {
 
 	@Test
 	void updateSettingsUnknownOrBlankSlugFailsClosedAndSavesNothing() {
-		assertThatThrownBy(() -> this.service.updateSettings("ghost", "X", null, null))
+		assertThatThrownBy(() -> this.service.updateSettings("ghost", "X", null, null, null, null))
 			.isInstanceOf(WorkspaceException.class)
 			.hasMessageContaining("Unknown workspace");
-		assertThatThrownBy(() -> this.service.updateSettings("   ", "X", null, null))
+		assertThatThrownBy(() -> this.service.updateSettings("   ", "X", null, null, null, null))
 			.isInstanceOf(WorkspaceException.class)
 			.hasMessageContaining("Unknown workspace");
 		verify(this.repository, never()).save(any());
@@ -163,18 +164,75 @@ class WorkspaceServiceTest {
 		given(this.repository.findBySlug("acme"))
 			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", null)));
 
-		assertThatThrownBy(() -> this.service.updateSettings("acme", "   ", null, null))
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "   ", null, null, null, null))
 			.isInstanceOf(WorkspaceException.class)
 			.hasMessageContaining("Label");
-		assertThatThrownBy(() -> this.service.updateSettings("acme", "x".repeat(121), null, null))
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "x".repeat(121), null, null, null, null))
 			.isInstanceOf(WorkspaceException.class)
 			.hasMessageContaining("Label");
-		assertThatThrownBy(() -> this.service.updateSettings("acme", "Acme", "red", null))
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "Acme", "red", null, null, null))
 			.isInstanceOf(WorkspaceException.class)
 			.hasMessageContaining("Color");
-		assertThatThrownBy(() -> this.service.updateSettings("acme", "Acme", null, "Mars/Olympus"))
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "Acme", null, "Mars/Olympus", null, null))
 			.isInstanceOf(WorkspaceException.class)
 			.hasMessageContaining("timezone");
+		verify(this.repository, never()).save(any());
+	}
+
+	@Test
+	void updateSettingsPersistsNormalizedLanguagesAndBrandVoice() {
+		OffsetDateTime createdAt = OffsetDateTime.parse("2026-11-17T10:00:00Z");
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", createdAt)));
+
+		Workspace updated = this.service.updateSettings("acme", "Acme", null, null, " de , en , fr-CH ",
+				"  Friendly, concise, no emoji.  ");
+
+		ArgumentCaptor<Workspace> captor = ArgumentCaptor.forClass(Workspace.class);
+		verify(this.repository).save(captor.capture());
+		Workspace saved = captor.getValue();
+		assertThat(saved.id()).isEqualTo(7L);
+		assertThat(saved.slug()).isEqualTo("acme");
+		assertThat(saved.createdAt()).isEqualTo(createdAt);
+		assertThat(saved.languages()).isEqualTo("de,en,fr-CH");
+		assertThat(saved.brandVoice()).isEqualTo("Friendly, concise, no emoji.");
+		assertThat(updated).isSameAs(saved);
+	}
+
+	@Test
+	void updateSettingsBlankProfileStoresNull() {
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", null)));
+
+		Workspace updated = this.service.updateSettings("acme", "Acme", null, null, "   ", "  ");
+
+		assertThat(updated.languages()).isNull();
+		assertThat(updated.brandVoice()).isNull();
+	}
+
+	@Test
+	void updateSettingsInvalidLanguagesFailClosedAndSaveNothing() {
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", null)));
+
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "Acme", null, null, "english!", null))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("language");
+		assertThatThrownBy(
+				() -> this.service.updateSettings("acme", "Acme", null, null, "en,de,fr,it,es,pt,nl,sv,da,pl,cs", null))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("languages");
+		verify(this.repository, never()).save(any());
+	}
+
+	@Test
+	void updateSettingsInvalidBrandVoiceFailsClosedAndSavesNothing() {
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", null)));
+
+		assertThatThrownBy(() -> this.service.updateSettings("acme", "Acme", null, null, null, "x".repeat(2001)))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Brand voice");
 		verify(this.repository, never()).save(any());
 	}
 
