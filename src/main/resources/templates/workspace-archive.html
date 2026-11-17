@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Archive')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="'Archive ' + ${workspace.label} + '?'">Archive workspace?</h1>
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p>Archiving workspace <strong th:text="${workspace.slug}">slug</strong> blocks new publication, scheduling and AI
+      assistance. It cancels the unclaimed work listed below and marks unresolved deliveries as acknowledged.
+      <strong>History, publications, deliveries and private media are all retained — nothing is deleted</strong>, and
+      the secret-free export keeps working. Reopening the workspace never auto-resumes canceled work.</p>
+    <ul>
+      <li th:text="${report.pendingSchedules()} + ' pending schedule(s) will be canceled'">0 pending schedules</li>
+      <li th:text="${report.unclaimedJobs()} + ' unclaimed job(s) will be canceled (running jobs settle on their own)'">0 unclaimed jobs</li>
+      <li th:text="${report.unresolvedDeliveries()} + ' unresolved delivery(ies) will be marked acknowledged'">0 unresolved deliveries</li>
+    </ul>
+    <form method="post" th:action="@{/w/{slug}/archive(slug=${workspace.slug})}">
+      <button type="submit">Archive workspace</button>
+    </form>
+    <p><a th:href="@{/w/{slug}/settings(slug=${workspace.slug})}">&larr; Cancel — back to settings</a></p>
+  </main>
+</body>
+</html>

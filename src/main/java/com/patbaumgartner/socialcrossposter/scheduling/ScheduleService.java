@@ -26,6 +26,7 @@ import com.patbaumgartner.socialcrossposter.publish.Publication;
 import com.patbaumgartner.socialcrossposter.publish.PublicationService;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
+import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
 /**
  * One-time publication schedules (UC-10, ADR-004, ADR-009, ADR-013, ADR-016).
@@ -108,6 +109,10 @@ public class ScheduleService {
 	@Transactional
 	public PublicationSchedule schedule(Long workspaceId, Long postId, String localDateTime, String timezone,
 			String offsetChoice) {
+		// UC-15 step 6: an archived workspace blocks new scheduling (assertActive throws
+		// a sanitized WorkspaceException the web layer flashes).
+		WorkspaceService.assertActive(
+				this.workspaces.findById(workspaceId).orElseThrow(() -> new ScheduleException("Unknown workspace.")));
 		Post post = this.posts.requirePost(workspaceId, postId);
 		if (PostService.STATE_ARCHIVED.equals(post.state())) {
 			throw new ScheduleException("Archived posts cannot be scheduled.");
@@ -218,6 +223,12 @@ public class ScheduleService {
 			return;
 		}
 		Workspace workspace = this.workspaces.findById(current.workspaceId()).orElseThrow();
+		// UC-15 step 6: an archived workspace must not dispatch — cancel the due PENDING
+		// schedule instead of publishing (history stays readable, nothing is dispatched).
+		if (workspace.archived()) {
+			this.schedules.transition(current.id(), current.workspaceId(), S_PENDING, S_CANCELED, now);
+			return;
+		}
 		String payloadHash = this.publications.payloadHashFor(current.workspaceId(), current.revisionId());
 		if (!payloadHash.equals(current.payloadHash())) {
 			this.schedules.transition(current.id(), current.workspaceId(), S_PENDING, S_NEEDS_REVIEW, now);

@@ -19,6 +19,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import com.patbaumgartner.socialcrossposter.archive.ArchiveReport;
+import com.patbaumgartner.socialcrossposter.archive.WorkspaceArchiveException;
+import com.patbaumgartner.socialcrossposter.archive.WorkspaceArchiveService;
 import com.patbaumgartner.socialcrossposter.export.WorkspaceExportException;
 import com.patbaumgartner.socialcrossposter.export.WorkspaceExportService;
 import com.patbaumgartner.socialcrossposter.notify.NotificationChannel;
@@ -41,7 +44,10 @@ import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
  * (languages/brand voice) and protected event facts/links on /w/{slug}/settings, and the
  * notification payload default (snippet opt-in) on /w/{slug}/settings/notifications — the
  * slug is immutable (ADR-013). UC-15 step 5: /w/{slug}/export downloads the workspace's
- * secret-free content export as a ZIP (ADR-007).
+ * secret-free content export as a ZIP (ADR-007). UC-15 step 6: /w/{slug}/archive shows
+ * what archiving would cancel/acknowledge, POST archives the workspace (cancels unclaimed
+ * work, acknowledges unresolved deliveries, blocks new work), POST reopens it — history
+ * and media are retained throughout.
  */
 @Controller
 public class WorkspaceController {
@@ -56,14 +62,17 @@ public class WorkspaceController {
 
 	private final WorkspaceExportService exportService;
 
+	private final WorkspaceArchiveService archiveService;
+
 	public WorkspaceController(WorkspaceService workspaces, NotificationService notifications,
 			NotificationChannelService channels, NotificationDeliveryService deliveries,
-			WorkspaceExportService exportService) {
+			WorkspaceExportService exportService, WorkspaceArchiveService archiveService) {
 		this.workspaces = workspaces;
 		this.notifications = notifications;
 		this.channels = channels;
 		this.deliveries = deliveries;
 		this.exportService = exportService;
+		this.archiveService = archiveService;
 	}
 
 	@GetMapping("/")
@@ -202,6 +211,79 @@ public class WorkspaceController {
 		catch (WorkspaceExportException ex) {
 			redirect.addFlashAttribute("error", ex.getMessage());
 			return "redirect:/w/" + slug + "/dashboard";
+		}
+	}
+
+	/**
+	 * UC-15 step 6: confirmation page for archiving one workspace — lists the pending
+	 * schedules, unclaimed jobs and unresolved deliveries that archiving would cancel or
+	 * acknowledge. An unknown slug returns to the picker; an already archived workspace
+	 * flashes an error and returns to settings.
+	 */
+	@GetMapping("/w/{slug}/archive")
+	public String archiveForm(@PathVariable String slug, Model model, RedirectAttributes redirect) {
+		Optional<Workspace> workspace = this.workspaces.findBySlug(slug);
+		if (workspace.isEmpty()) {
+			return "redirect:/";
+		}
+		try {
+			ArchiveReport report = this.archiveService.preview(workspace.get().id());
+			model.addAttribute("workspace", workspace.get());
+			model.addAttribute("report", report);
+			return "workspace-archive";
+		}
+		catch (WorkspaceArchiveException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+			return "redirect:/w/" + slug + "/settings";
+		}
+	}
+
+	/**
+	 * UC-15 step 6: archives one workspace — cancels its PENDING schedules and jobs,
+	 * acknowledges its unresolved deliveries and sets the archived flag (new publication,
+	 * scheduling and AI are then blocked by the service guards). History and private
+	 * media are retained; nothing is deleted. The counts are flashed as a notice.
+	 */
+	@PostMapping("/w/{slug}/archive")
+	public String archive(@PathVariable String slug, RedirectAttributes redirect) {
+		Optional<Workspace> workspace = this.workspaces.findBySlug(slug);
+		if (workspace.isEmpty()) {
+			return "redirect:/";
+		}
+		try {
+			ArchiveReport report = this.archiveService.archive(workspace.get().id());
+			redirect.addFlashAttribute("notice", "Workspace '" + workspace.get().label() + "' archived — "
+					+ report.pendingSchedules() + " pending schedule(s) and " + report.unclaimedJobs()
+					+ " unclaimed job(s) canceled, " + report.unresolvedDeliveries()
+					+ " unresolved delivery(ies) acknowledged. History and media are retained; new work is blocked until reopen.");
+			return "redirect:/w/" + slug + "/settings";
+		}
+		catch (WorkspaceArchiveException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+			return "redirect:/w/" + slug + "/settings";
+		}
+	}
+
+	/**
+	 * UC-15 step 6: reopens an archived workspace — clears the archived flag so new
+	 * publication, scheduling and AI work again. Canceled schedules and jobs are NOT
+	 * resumed; they stay canceled and need a fresh owner approval.
+	 */
+	@PostMapping("/w/{slug}/reopen")
+	public String reopen(@PathVariable String slug, RedirectAttributes redirect) {
+		Optional<Workspace> workspace = this.workspaces.findBySlug(slug);
+		if (workspace.isEmpty()) {
+			return "redirect:/";
+		}
+		try {
+			Workspace reopened = this.archiveService.reopen(workspace.get().id());
+			redirect.addFlashAttribute("notice",
+					"Workspace '" + reopened.label() + "' reopened — new publication, scheduling and AI work again.");
+			return "redirect:/w/" + slug + "/settings";
+		}
+		catch (WorkspaceArchiveException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+			return "redirect:/w/" + slug + "/settings";
 		}
 	}
 

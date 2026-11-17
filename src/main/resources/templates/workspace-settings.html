@@ -55,6 +55,14 @@
       </fieldset>
     </form>
     <p><a th:href="@{/w/{slug}/export(slug=${workspace.slug})}">Download secret-free content export (ZIP)</a> — tables with secrets redacted, private media, checksum manifest; excludes credentials and is not a recovery backup.</p>
+    <section class="workspace-archive" th:if="${workspace.archived}">
+      <p class="alert" role="status"><strong>This workspace is archived</strong> (since
+        <span th:text="${workspace.archivedAt}">…</span>) — new publication, scheduling and AI assistance are blocked. History, media and the export stay available.</p>
+      <form method="post" th:action="@{/w/{slug}/reopen(slug=${workspace.slug})}">
+        <button type="submit">Reopen workspace</button>
+      </form>
+    </section>
+    <p th:if="${!workspace.archived}"><a th:href="@{/w/{slug}/archive(slug=${workspace.slug})}">Archive this workspace</a> — cancels pending schedules and unclaimed jobs, acknowledges unresolved deliveries and blocks new work; history and media are retained.</p>
     <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Back to dashboard</a></p>
   </main>
 </body>

@@ -15,22 +15,25 @@ import org.springframework.data.relational.core.mapping.Table;
  * UC-15 fourth slice) — all nullable, NULL means unset. {@code notifySnippets} is the
  * notification payload default (Flyway V18, UC-15 fifth slice): FALSE (the default) keeps
  * external notification payloads redacted, TRUE opts in to a bounded post-text snippet
- * (UC-12 alternative flow 4).
+ * (UC-12 alternative flow 4). {@code archived} (Flyway V19, UC-15 seventh slice, main
+ * flow step 6) blocks new publication, scheduling and AI assistance while the workspace
+ * is archived; {@code archivedAt} records when the owner archived it (NULL when active).
  */
 @Table("workspace")
 public record Workspace(@Id @Column("id") Long id, @Column("slug") String slug, @Column("label") String label,
 		@Column("color") String color, @Column("timezone") String timezone,
 		@Column("created_at") OffsetDateTime createdAt, @Column("languages") String languages,
 		@Column("brand_voice") String brandVoice, @Column("event_facts") String eventFacts,
-		@Column("event_links") String eventLinks, @Column("notify_snippets") boolean notifySnippets) {
+		@Column("event_links") String eventLinks, @Column("notify_snippets") boolean notifySnippets,
+		@Column("archived") boolean archived, @Column("archived_at") OffsetDateTime archivedAt) {
 
 	/**
 	 * Convenience constructor for rows without a configured profile (V1-era rows and
-	 * freshly created workspaces): languages/brand voice/event anchors are unset and
-	 * snippets are opted out.
+	 * freshly created workspaces): languages/brand voice/event anchors are unset,
+	 * snippets are opted out and the workspace is active.
 	 */
 	public Workspace(Long id, String slug, String label, String color, String timezone, OffsetDateTime createdAt) {
-		this(id, slug, label, color, timezone, createdAt, null, null, null, null, false);
+		this(id, slug, label, color, timezone, createdAt, null, null, null, null, false, false, null);
 	}
 
 	/**
@@ -38,7 +41,7 @@ public record Workspace(@Id @Column("id") Long id, @Column("slug") String slug, 
 	 */
 	public Workspace(Long id, String slug, String label, String color, String timezone, OffsetDateTime createdAt,
 			String languages, String brandVoice) {
-		this(id, slug, label, color, timezone, createdAt, languages, brandVoice, null, null, false);
+		this(id, slug, label, color, timezone, createdAt, languages, brandVoice, null, null, false, false, null);
 	}
 
 	/**
@@ -47,7 +50,8 @@ public record Workspace(@Id @Column("id") Long id, @Column("slug") String slug, 
 	 */
 	public Workspace(Long id, String slug, String label, String color, String timezone, OffsetDateTime createdAt,
 			String languages, String brandVoice, String eventFacts, String eventLinks) {
-		this(id, slug, label, color, timezone, createdAt, languages, brandVoice, eventFacts, eventLinks, false);
+		this(id, slug, label, color, timezone, createdAt, languages, brandVoice, eventFacts, eventLinks, false, false,
+				null);
 	}
 
 }

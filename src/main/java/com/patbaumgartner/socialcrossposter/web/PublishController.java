@@ -25,6 +25,7 @@ import com.patbaumgartner.socialcrossposter.publish.Publication;
 import com.patbaumgartner.socialcrossposter.publish.PublicationException;
 import com.patbaumgartner.socialcrossposter.publish.PublicationService;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
+import com.patbaumgartner.socialcrossposter.workspace.WorkspaceException;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
 /**
@@ -113,7 +114,7 @@ public class PublishController {
 								: "Publication submitted — aggregate state " + refreshed.state()
 										+ " (see Publications below).");
 			}
-			catch (PublicationException | PostException ex) {
+			catch (PublicationException | PostException | WorkspaceException ex) {
 				redirect.addFlashAttribute("error", ex.getMessage());
 			}
 			return "redirect:/w/" + slug + "/posts/" + id;
