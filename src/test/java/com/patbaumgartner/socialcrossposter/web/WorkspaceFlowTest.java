@@ -186,6 +186,112 @@ class WorkspaceFlowTest {
 		assertThat(this.workspaces.count()).isEqualTo(before);
 	}
 
+	@Test
+	void settingsFormRequiresLogin() throws Exception {
+		this.mockMvc.perform(get("/w/private/settings"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/login"));
+	}
+
+	@Test
+	void settingsFormUnknownSlugRedirectsToPicker() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc.perform(get("/w/ghost/settings").session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/"));
+	}
+
+	@Test
+	void settingsFormShowsCurrentValues() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc.perform(get("/w/private/settings").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Private")))
+			.andExpect(content().string(containsString("private")))
+			.andExpect(content().string(containsString("Europe/Zurich")));
+	}
+
+	@Test
+	void updateSettingsRequiresCsrfTokenAndLeavesRowUnchanged() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc
+			.perform(post("/w/private/settings").session(session).param("label", "Hacked").param("color", "#dc2626"))
+			.andExpect(status().isForbidden());
+		Optional<Workspace> row = this.workspaces.findBySlug("private");
+		assertThat(row).isPresent();
+		assertThat(row.get().label()).isEqualTo("Private");
+		assertThat(row.get().color()).isEqualTo("#6b7280");
+	}
+
+	@Test
+	void updateSettingsSuccessPersistsFieldsKeepsSlugIdAndCreatedAt() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc
+			.perform(post("/workspaces").with(csrf())
+				.session(session)
+				.param("slug", "acme")
+				.param("label", "Acme")
+				.param("color", "#dc2626")
+				.param("timezone", "Europe/Zurich"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/dashboard"));
+		Workspace before = this.workspaces.findBySlug("acme").orElseThrow();
+
+		this.mockMvc
+			.perform(post("/w/acme/settings").with(csrf())
+				.session(session)
+				.param("label", " Acme AG ")
+				.param("color", "#059669")
+				.param("timezone", "Europe/Berlin"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/dashboard"))
+			.andExpect(flash().attribute("notice", containsString("Acme AG")));
+
+		Workspace after = this.workspaces.findBySlug("acme").orElseThrow();
+		assertThat(after.id()).isEqualTo(before.id());
+		assertThat(after.slug()).isEqualTo("acme");
+		assertThat(after.createdAt()).isEqualTo(before.createdAt());
+		assertThat(after.label()).isEqualTo("Acme AG");
+		assertThat(after.color()).isEqualTo("#059669");
+		assertThat(after.timezone()).isEqualTo("Europe/Berlin");
+
+		// The dashboard shows the new label, and the settings form pre-fills the new
+		// values.
+		this.mockMvc.perform(get("/w/acme/dashboard").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Acme AG")));
+		this.mockMvc.perform(get("/w/acme/settings").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Acme AG")))
+			.andExpect(content().string(containsString("Europe/Berlin")));
+	}
+
+	@Test
+	void updateSettingsInvalidShowsErrorAndLeavesRowUnchanged() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc
+			.perform(post("/workspaces").with(csrf()).session(session).param("slug", "acme").param("label", "Acme"))
+			.andExpect(status().is3xxRedirection());
+
+		this.mockMvc.perform(post("/w/acme/settings").with(csrf()).session(session).param("label", "   "))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/settings"))
+			.andExpect(flash().attribute("error", containsString("Label")));
+
+		Workspace row = this.workspaces.findBySlug("acme").orElseThrow();
+		assertThat(row.label()).isEqualTo("Acme");
+	}
+
+	@Test
+	void updateSettingsUnknownSlugRedirectsToPicker() throws Exception {
+		MockHttpSession session = login();
+		long before = this.workspaces.count();
+		this.mockMvc.perform(post("/w/ghost/settings").with(csrf()).session(session).param("label", "Ghost"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/"));
+		assertThat(this.workspaces.count()).isEqualTo(before);
+	}
+
 	private MockHttpSession login() throws Exception {
 		MvcResult result = this.mockMvc.perform(formLogin().user("owner").password("test-password"))
 			.andExpect(authenticated())
