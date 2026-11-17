@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.patbaumgartner.socialcrossposter.accounts.ConnectionService;
+import com.patbaumgartner.socialcrossposter.platform.ExperimentalPlatforms;
 import com.patbaumgartner.socialcrossposter.publish.Delivery;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryDetail;
 import com.patbaumgartner.socialcrossposter.publish.DeliveryJob;
@@ -104,6 +105,9 @@ public class HistoryController {
 			model.addAttribute("accounts", this.connections.listDestinations(workspace.id()));
 			model.addAttribute("platforms", this.history.platformsOf(workspace.id()));
 			model.addAttribute("states", STATES);
+			// UC-14: permanent experimental label for whatsapp-status/signal deliveries
+			model.addAttribute("experimentalPlatforms", ExperimentalPlatforms.experimentalKeys());
+			model.addAttribute("experimentalLabel", ExperimentalPlatforms.LABEL);
 			model.addAttribute("account", account);
 			model.addAttribute("platform", platform);
 			model.addAttribute("state", state);
@@ -147,6 +151,10 @@ public class HistoryController {
 				model.addAttribute("actionsByDelivery", actionsByDelivery);
 				model.addAttribute("canEditByDelivery", canEditByDelivery);
 				model.addAttribute("canDeleteByDelivery", canDeleteByDelivery);
+				// UC-14: permanent experimental label for whatsapp-status/signal
+				// deliveries
+				model.addAttribute("experimentalPlatforms", ExperimentalPlatforms.experimentalKeys());
+				model.addAttribute("experimentalLabel", ExperimentalPlatforms.LABEL);
 				return "history-detail";
 			}
 			catch (PublicationException ex) {

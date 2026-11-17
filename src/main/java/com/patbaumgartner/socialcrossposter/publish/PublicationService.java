@@ -33,6 +33,7 @@ import com.patbaumgartner.socialcrossposter.content.PostService;
 import com.patbaumgartner.socialcrossposter.content.PreviewService;
 import com.patbaumgartner.socialcrossposter.content.RevisionDestination;
 import com.patbaumgartner.socialcrossposter.content.RevisionOverride;
+import com.patbaumgartner.socialcrossposter.platform.ExperimentalPlatforms;
 import com.patbaumgartner.socialcrossposter.platform.ImportSource;
 import com.patbaumgartner.socialcrossposter.platform.MediaAttachment;
 import com.patbaumgartner.socialcrossposter.platform.PlatformPublisher;
@@ -59,7 +60,10 @@ import com.patbaumgartner.socialcrossposter.platform.ReconcilerRegistry;
  * (UC-07). {@link #refreshAggregate} derives the ADR-015 aggregate state in the
  * documented priority order. All lookups are workspace-scoped and fail closed for foreign
  * ids (ADR-013); credentials are decrypted per delivery with the AAD-bound cipher and
- * never logged (ADR-007).
+ * never logged (ADR-007). UC-14 alternative flow 4: deliveries whose connection rides an
+ * experimental bridge (whatsapp-status/signal) are blocked while that bridge's health is
+ * not OK — NEEDS_REVIEW with a redacted attempt, never a remote write — and healthy
+ * official targets are unaffected (ADR-010).
  */
 @Service
 public class PublicationService {
@@ -435,6 +439,17 @@ public class PublicationService {
 			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
 		}
 		Connection connection = connectionOpt.get();
+		// UC-14 alternative flow 4 / ADR-010: an experimental bridge (whatsapp-status,
+		// signal) that is down or unlinked (health not OK) blocks its dependent
+		// deliveries with a redacted BLOCKED attempt and NEEDS_REVIEW — before any
+		// credential is decrypted — and never touches official targets.
+		if (ExperimentalPlatforms.isExperimental(connection.platform()) && !"OK".equals(connection.healthState())) {
+			recordAttempt(workspaceId, delivery.id(), attemptNo, "authorize", "BLOCKED",
+					"Experimental bridge for platform '" + connection.platform() + "' is not healthy (health="
+							+ connection.healthState() + ") — dependent delivery blocked (ADR-010); review required.",
+					null, now);
+			return saveDeliveryState(delivery, D_NEEDS_REVIEW, null, now);
+		}
 		String credential;
 		try {
 			credential = this.secrets.open(

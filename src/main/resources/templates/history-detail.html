@@ -27,7 +27,9 @@
       <h2>Deliveries</h2>
       <p th:if="${detail.deliveries.isEmpty()}"><em>No deliveries.</em></p>
       <div th:each="dd : ${detail.deliveries}" class="card">
-        <h3 th:text="${dd.delivery.platform + ' · ' + dd.delivery.destinationLabel}">destination</h3>
+        <h3><span th:text="${dd.delivery.platform + ' · ' + dd.delivery.destinationLabel}">destination</span>
+          <small th:if="${experimentalPlatforms.contains(dd.delivery.platform)}"
+                 th:text="${experimentalLabel}">experimental / unofficial</small></h3>
         <p>Provider identity: <code th:text="${dd.delivery.providerAccountId}">id</code>
           <span th:if="${dd.delivery.host != null and !#strings.isEmpty(dd.delivery.host)}" th:text="' @' + ${dd.delivery.host}">host</span>
           · state <span class="badge" th:text="${dd.delivery.state}">SUCCESS</span>
