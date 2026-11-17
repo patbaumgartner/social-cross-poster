@@ -33,6 +33,14 @@
         <textarea name="brandVoice" maxlength="2000" rows="4" th:text="${workspace.brandVoice}"
                   placeholder="Friendly, concise, no emoji…"></textarea>
       </label>
+      <label>Event facts (protected anchors for AI assistance; only an explicit owner edit changes them)
+        <textarea name="eventFacts" maxlength="2000" rows="4" th:text="${workspace.eventFacts}"
+                  placeholder="Voxxed Days Zurich 2026, June 11–12, Zurich&#8230;"></textarea>
+      </label>
+      <label>Event links (csv of absolute http(s) URLs, empty = unset; protected anchors)
+        <input type="text" name="eventLinks" maxlength="2000" th:value="${workspace.eventLinks}"
+               placeholder="https://voxxeddays.com/zurich, https://…/tickets">
+      </label>
       <button type="submit">Save settings</button>
     </form>
     <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Back to dashboard</a></p>
