@@ -28,7 +28,7 @@ Keep approved history and required private source media without automatic expiry
 
 ## Backup contract
 
-Back up PostgreSQL, private immutable source media and derivatives, deployment configuration, signing-key versions, encryption keys, and enabled bridge session data. A content export excludes secrets and cannot replace a disaster-recovery backup.
+Back up PostgreSQL, private immutable source media and derivatives, deployment configuration, signing-key versions, encryption keys, and enabled bridge session data. The per-workspace content export (`GET /w/{slug}/export`, UC-15 step 5) is such a content export: a ZIP with the workspace's whitelisted tables as JSON (every column whose name contains cipher/nonce/key_id/secret/password/token redacted), the private media files and a `manifest.json` with per-entry SHA-256 checksums and the Flyway schema version. It excludes secrets by construction and cannot replace a disaster-recovery backup.
 
 1. Enter maintenance mode: stop schedule dispatch, publication/AI/notification job claims, uploads, and edits; drain active work where possible. Mark ambiguous remote effects for later reconciliation.
 2. Create a consistent `pg_dump` with a compatible client and copy the now-stable media set with a checksum manifest. Preserve schema/app versions, selected image digests, workspace counts, key IDs, and backup timestamp.
