@@ -54,6 +54,7 @@
         <button type="submit">Save notification defaults</button>
       </fieldset>
     </form>
+    <p><a th:href="@{/w/{slug}/export(slug=${workspace.slug})}">Download secret-free content export (ZIP)</a> — tables with secrets redacted, private media, checksum manifest; excludes credentials and is not a recovery backup.</p>
     <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Back to dashboard</a></p>
   </main>
 </body>

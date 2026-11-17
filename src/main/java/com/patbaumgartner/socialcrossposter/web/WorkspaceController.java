@@ -1,9 +1,16 @@
 package com.patbaumgartner.socialcrossposter.web;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.servlet.http.HttpSession;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +19,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import com.patbaumgartner.socialcrossposter.export.WorkspaceExportException;
+import com.patbaumgartner.socialcrossposter.export.WorkspaceExportService;
 import com.patbaumgartner.socialcrossposter.notify.NotificationChannel;
 import com.patbaumgartner.socialcrossposter.notify.NotificationChannelService;
 import com.patbaumgartner.socialcrossposter.notify.NotificationDelivery;
@@ -31,7 +40,8 @@ import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
  * step 2: the owner edits an existing workspace's label/color/timezone, profile
  * (languages/brand voice) and protected event facts/links on /w/{slug}/settings, and the
  * notification payload default (snippet opt-in) on /w/{slug}/settings/notifications — the
- * slug is immutable (ADR-013).
+ * slug is immutable (ADR-013). UC-15 step 5: /w/{slug}/export downloads the workspace's
+ * secret-free content export as a ZIP (ADR-007).
  */
 @Controller
 public class WorkspaceController {
@@ -44,12 +54,16 @@ public class WorkspaceController {
 
 	private final NotificationDeliveryService deliveries;
 
+	private final WorkspaceExportService exportService;
+
 	public WorkspaceController(WorkspaceService workspaces, NotificationService notifications,
-			NotificationChannelService channels, NotificationDeliveryService deliveries) {
+			NotificationChannelService channels, NotificationDeliveryService deliveries,
+			WorkspaceExportService exportService) {
 		this.workspaces = workspaces;
 		this.notifications = notifications;
 		this.channels = channels;
 		this.deliveries = deliveries;
+		this.exportService = exportService;
 	}
 
 	@GetMapping("/")
@@ -160,6 +174,35 @@ public class WorkspaceController {
 			model.addAttribute("recentByChannel", recentByChannel);
 			return "dashboard";
 		}).orElse("redirect:/");
+	}
+
+	/**
+	 * UC-15 step 5: secret-free content export of one workspace as a ZIP download —
+	 * whitelisted tables as JSON with secret-looking columns redacted, the private media
+	 * files, and a manifest.json with SHA-256 checksums and the schema version. Never
+	 * credentials; not a recovery backup. An unknown slug returns to the picker; the
+	 * route sits behind the owner login like every other route (ADR-005).
+	 */
+	@GetMapping("/w/{slug}/export")
+	public Object export(@PathVariable String slug, RedirectAttributes redirect) {
+		Optional<Workspace> workspace = this.workspaces.findBySlug(slug);
+		if (workspace.isEmpty()) {
+			return "redirect:/";
+		}
+		try {
+			byte[] zip = this.exportService.export(workspace.get().id(), workspace.get().slug());
+			String filename = "scp-export-" + workspace.get().slug() + "-"
+					+ DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC).format(Instant.now())
+					+ ".zip";
+			return ResponseEntity.ok()
+				.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+				.contentType(MediaType.parseMediaType("application/zip"))
+				.body(zip);
+		}
+		catch (WorkspaceExportException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+			return "redirect:/w/" + slug + "/dashboard";
+		}
 	}
 
 }

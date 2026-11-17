@@ -3,6 +3,7 @@ package com.patbaumgartner.socialcrossposter.media;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -10,6 +11,7 @@ import java.time.OffsetDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -230,6 +232,24 @@ public class MediaService {
 		}
 		catch (IOException ex) {
 			throw new UncheckedIOException("The stored image could not be deleted.", ex);
+		}
+	}
+
+	/**
+	 * All stored files of one workspace's media directory — private originals and
+	 * outgoing derivatives — for the secret-free workspace export (UC-15 step 5). A
+	 * missing directory yields an empty list; an unreadable one fails the export.
+	 */
+	public List<Path> mediaFilesOf(Long workspaceId) {
+		Path dir = Path.of(this.props.dir(), workspaceId.toString());
+		try (Stream<Path> files = Files.list(dir)) {
+			return files.filter(Files::isRegularFile).sorted().toList();
+		}
+		catch (NoSuchFileException ex) {
+			return List.of();
+		}
+		catch (IOException ex) {
+			throw new UncheckedIOException("The media directory could not be listed.", ex);
 		}
 	}
 
