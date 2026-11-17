@@ -5,6 +5,8 @@
   <header th:replace="~{fragments/layout :: topbar}"></header>
   <main class="content">
     <h1>Choose a workspace</h1>
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p class="notice" role="status" th:if="${notice}" th:text="${notice}">Notice</p>
     <p>Each workspace owns its accounts, contacts, drafts, media, history, schedules, notifications and AI settings.</p>
     <ul class="workspace-list">
       <li th:each="ws : ${workspaces}">
@@ -15,6 +17,32 @@
         </a>
       </li>
     </ul>
+    <h2>Create a workspace</h2>
+    <p>A workspace is a separate account set: its own connections, destinations, contacts, drafts, media, history, schedules and notifications. The slug becomes part of its URLs.</p>
+    <form method="post" th:action="@{/workspaces}" class="workspace-create">
+      <label>Slug
+        <input type="text" name="slug" required maxlength="63" placeholder="my-brand"
+               pattern="[a-z0-9][a-z0-9-]{0,62}" title="Lowercase letters, digits or dashes, starting with a letter or digit">
+      </label>
+      <label>Label
+        <input type="text" name="label" required maxlength="120" placeholder="My Brand">
+      </label>
+      <label>Color
+        <select name="color">
+          <option value="#3b82f6" selected>Blue #3b82f6</option>
+          <option value="#2563eb">Deep blue #2563eb</option>
+          <option value="#059669">Green #059669</option>
+          <option value="#7c3aed">Violet #7c3aed</option>
+          <option value="#dc2626">Red #dc2626</option>
+          <option value="#ea580c">Orange #ea580c</option>
+          <option value="#6b7280">Gray #6b7280</option>
+        </select>
+      </label>
+      <label>Timezone
+        <input type="text" name="timezone" maxlength="64" value="Europe/Zurich" placeholder="Europe/Zurich">
+      </label>
+      <button type="submit">Create workspace</button>
+    </form>
   </main>
 </body>
 </html>
