@@ -37,6 +37,9 @@ import com.patbaumgartner.socialcrossposter.platform.PublisherRegistry;
 import com.patbaumgartner.socialcrossposter.platform.ReconcileContext;
 import com.patbaumgartner.socialcrossposter.platform.ReconcileResult;
 import com.patbaumgartner.socialcrossposter.platform.ReconcilerRegistry;
+import com.patbaumgartner.socialcrossposter.workspace.Workspace;
+import com.patbaumgartner.socialcrossposter.workspace.WorkspaceException;
+import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -112,6 +115,8 @@ class PublicationServiceTest {
 
 	private ImportGrantService importGrants;
 
+	private WorkspaceRepository workspaces;
+
 	private PlatformPublisher publisher;
 
 	private ReconcilerRegistry reconcilers;
@@ -145,11 +150,12 @@ class PublicationServiceTest {
 		this.deliveryMedia = mock(DeliveryMediaRepository.class);
 		this.media = mock(MediaService.class);
 		this.importGrants = mock(ImportGrantService.class);
+		this.workspaces = mock(WorkspaceRepository.class);
 		this.publisher = mock(PlatformPublisher.class);
 		this.reconciler = mock(PlatformReconciler.class);
 		this.service = new PublicationService(this.posts, this.previewService, this.mentions, this.accounts,
 				this.connections, this.secrets, this.publishers, this.reconcilers, this.publications, this.deliveries,
-				this.attempts, this.revisionMedia, this.deliveryMedia, this.media, this.importGrants);
+				this.attempts, this.revisionMedia, this.deliveryMedia, this.media, this.importGrants, this.workspaces);
 
 		this.post = new Post(POST_ID, WS, "Title", PostService.STATE_DRAFT, REVISION_ID, 1L, NOW, NOW);
 		this.revision = new PostRevision(REVISION_ID, WS, POST_ID, 1, "hello", NOW);
@@ -158,6 +164,8 @@ class PublicationServiceTest {
 		this.connection = new Connection(CONN, WS, "telegram", "pasted", "@testbot", "Main bot", "cipher", "nonce",
 				"test-v1", "OK", NOW, true, NOW, NOW);
 
+		given(this.workspaces.findById(WS))
+			.willReturn(Optional.of(new Workspace(WS, "private", "Private", "#3b82f6", "Europe/Zurich", NOW)));
 		given(this.posts.requirePost(WS, POST_ID)).willReturn(this.post);
 		given(this.posts.currentRevision(WS, POST_ID)).willReturn(this.revision);
 		given(this.posts.destinationsOf(REVISION_ID))
@@ -199,6 +207,19 @@ class PublicationServiceTest {
 		verify(this.deliveries).save(argThat((Delivery d) -> PublicationService.D_PENDING.equals(d.state())
 				&& "hello".equals(d.payloadText()) && d.payloadHash() != null && d.payloadHash().length() == 64
 				&& "-100123".equals(d.providerAccountId()) && d.accountId().equals(ACCOUNT)));
+	}
+
+	@Test
+	void createOnArchivedWorkspaceIsBlocked() {
+		given(this.workspaces.findById(WS)).willReturn(Optional.of(new Workspace(WS, "private", "Private", "#3b82f6",
+				"Europe/Zurich", NOW, null, null, null, null, false, true, NOW)));
+
+		assertThatThrownBy(() -> this.service.create(WS, "private", POST_ID, "key-archived"))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("archived");
+
+		verify(this.publications, never()).save(any(Publication.class));
+		verify(this.deliveries, never()).save(any(Delivery.class));
 	}
 
 	@Test

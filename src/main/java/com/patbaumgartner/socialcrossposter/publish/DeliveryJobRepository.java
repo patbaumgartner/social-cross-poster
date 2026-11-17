@@ -19,6 +19,24 @@ public interface DeliveryJobRepository extends CrudRepository<DeliveryJob, Long>
 	List<DeliveryJob> findAllByWorkspaceId(Long workspaceId);
 
 	/**
+	 * Jobs of one workspace in one state (UC-15 step 6 archive: unclaimed PENDING jobs
+	 * are listed before they are canceled; RUNNING jobs hold a lease and settle on their
+	 * own).
+	 */
+	List<DeliveryJob> findAllByWorkspaceIdAndState(Long workspaceId, String state);
+
+	/**
+	 * UC-15 step 6: cancels all unclaimed (PENDING) jobs of one workspace in one
+	 * statement, clearing any stale lease columns. Returns the number of canceled jobs.
+	 * RUNNING jobs are left alone — a live lease settles through the normal worker path.
+	 */
+	@Transactional
+	@Modifying
+	@Query("UPDATE delivery_job SET state = 'CANCELED', lease_owner = NULL, lease_until = NULL, updated_at = :now "
+			+ "WHERE workspace_id = :workspaceId AND state = 'PENDING'")
+	int cancelAllPending(@Param("workspaceId") Long workspaceId, @Param("now") OffsetDateTime now);
+
+	/**
 	 * Ids of jobs due now (UC-07, ADR-015): PENDING with {@code next_run_at} reached, or
 	 * RUNNING with an expired lease (crashed worker).
 	 */

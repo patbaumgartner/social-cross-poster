@@ -45,6 +45,9 @@ import com.patbaumgartner.socialcrossposter.platform.PublisherRegistry;
 import com.patbaumgartner.socialcrossposter.platform.ReconcileContext;
 import com.patbaumgartner.socialcrossposter.platform.ReconcileResult;
 import com.patbaumgartner.socialcrossposter.platform.ReconcilerRegistry;
+import com.patbaumgartner.socialcrossposter.workspace.Workspace;
+import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
+import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
 /**
  * Workspace-scoped publication service (UC-05 first slice, ADR-001, ADR-004, ADR-013,
@@ -143,6 +146,8 @@ public class PublicationService {
 
 	private final ImportGrantService importGrants;
 
+	private final WorkspaceRepository workspaces;
+
 	/**
 	 * UC-13: fail-closed blocker template (platform name formatted in) when a selected
 	 * destination's platform can neither upload the revision's attached images directly
@@ -157,7 +162,8 @@ public class PublicationService {
 			AccountRepository accounts, ConnectionRepository connections, SecretCipher secrets,
 			PublisherRegistry publishers, ReconcilerRegistry reconcilers, PublicationRepository publications,
 			DeliveryRepository deliveries, DeliveryAttemptRepository attempts, RevisionMediaRepository revisionMedia,
-			DeliveryMediaRepository deliveryMedia, MediaService media, ImportGrantService importGrants) {
+			DeliveryMediaRepository deliveryMedia, MediaService media, ImportGrantService importGrants,
+			WorkspaceRepository workspaces) {
 		this.posts = posts;
 		this.previewService = previewService;
 		this.mentions = mentions;
@@ -173,6 +179,7 @@ public class PublicationService {
 		this.deliveryMedia = deliveryMedia;
 		this.media = media;
 		this.importGrants = importGrants;
+		this.workspaces = workspaces;
 	}
 
 	/**
@@ -210,6 +217,11 @@ public class PublicationService {
 		if (PostService.STATE_ARCHIVED.equals(post.state())) {
 			throw new PublicationException("Archived posts cannot be published.");
 		}
+		// UC-15 step 6: an archived workspace blocks new publication (assertActive throws
+		// a sanitized WorkspaceException the web layer flashes).
+		Workspace workspace = this.workspaces.findById(workspaceId)
+			.orElseThrow(() -> new PublicationException("Unknown workspace."));
+		WorkspaceService.assertActive(workspace);
 		List<RevisionDestination> destinations = this.posts.destinationsOf(revision.id());
 		if (destinations.isEmpty()) {
 			throw new PublicationException("Select at least one destination before publishing.");

@@ -11,6 +11,7 @@ import com.patbaumgartner.socialcrossposter.scheduling.PublicationSchedule;
 import com.patbaumgartner.socialcrossposter.scheduling.ScheduleException;
 import com.patbaumgartner.socialcrossposter.scheduling.ScheduleService;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
+import com.patbaumgartner.socialcrossposter.workspace.WorkspaceException;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
 
 /**
@@ -49,7 +50,7 @@ public class ScheduleController {
 						+ s.scheduledAt() + " UTC (schedule #" + s.id() + ", PENDING). Dispatch is best-effort; remote "
 						+ "post-create is allowed until 15 minutes after the scheduled instant " + "(ADR-016).");
 			}
-			catch (ScheduleException | PostException ex) {
+			catch (ScheduleException | PostException | WorkspaceException ex) {
 				redirect.addFlashAttribute("error", ex.getMessage());
 			}
 			return "redirect:/w/" + slug + "/posts/" + id;
@@ -69,7 +70,7 @@ public class ScheduleController {
 						"Schedule #" + scheduleId + " canceled — no publication was created.");
 				return "redirect:/w/" + slug + "/posts/" + s.postId();
 			}
-			catch (ScheduleException ex) {
+			catch (ScheduleException | WorkspaceException ex) {
 				redirect.addFlashAttribute("error", ex.getMessage());
 				return "redirect:/w/" + slug + "/posts";
 			}

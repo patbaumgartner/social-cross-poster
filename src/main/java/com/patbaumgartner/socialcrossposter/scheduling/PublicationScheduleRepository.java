@@ -17,6 +17,12 @@ public interface PublicationScheduleRepository extends CrudRepository<Publicatio
 	List<PublicationSchedule> findAllByWorkspaceIdAndPostIdOrderByScheduledAtAsc(Long workspaceId, Long postId);
 
 	/**
+	 * Schedules of one workspace in one state (UC-15 step 6 archive: all PENDING
+	 * schedules are listed before they are canceled).
+	 */
+	List<PublicationSchedule> findAllByWorkspaceIdAndStateOrderByScheduledAtAsc(Long workspaceId, String state);
+
+	/**
 	 * Schedules due now (UC-10 step 4): PENDING with the resolved UTC instant reached.
 	 */
 	@Query("SELECT * FROM publication_schedule WHERE state = 'PENDING' AND scheduled_at <= :now "

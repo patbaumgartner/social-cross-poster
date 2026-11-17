@@ -417,7 +417,7 @@ class WorkspaceFlowTest {
 		assertThat(entries).containsKeys("manifest.json", "tables/workspace.json", "tables/connection.json",
 				"tables/post.json");
 		String manifest = new String(entries.get("manifest.json"), StandardCharsets.UTF_8);
-		assertThat(manifest).contains("\"slug\":\"acme\"").contains("\"schemaVersion\":\"18\"");
+		assertThat(manifest).contains("\"slug\":\"acme\"").contains("\"schemaVersion\":\"19\"");
 		assertThat(new String(entries.get("tables/workspace.json"), StandardCharsets.UTF_8)).contains("acme");
 	}
 
@@ -430,6 +430,68 @@ class WorkspaceFlowTest {
 		this.mockMvc.perform(get("/w/ghost/export").session(session))
 			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrl("/"));
+	}
+
+	@Test
+	void archiveRequiresLoginAndCsrfAndKnownSlug() throws Exception {
+		this.mockMvc.perform(get("/w/acme/archive"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/login"));
+		MockHttpSession session = login();
+		this.mockMvc.perform(post("/w/acme/archive").session(session)).andExpect(status().isForbidden());
+		this.mockMvc.perform(get("/w/ghost/archive").session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/"));
+		this.mockMvc.perform(post("/w/ghost/archive").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/"));
+	}
+
+	@Test
+	void archiveFlowShowsPreviewArchivesThenReopens() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc
+			.perform(post("/workspaces").with(csrf()).session(session).param("slug", "acme").param("label", "Acme"))
+			.andExpect(status().is3xxRedirection());
+
+		// the confirmation page lists what archiving would cancel/acknowledge (nothing
+		// yet)
+		this.mockMvc.perform(get("/w/acme/archive").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Archive Acme?")))
+			.andExpect(content().string(containsString("0 pending schedule(s)")));
+
+		// archiving flips the flag, flashes the counts and the settings page shows the
+		// banner
+		this.mockMvc.perform(post("/w/acme/archive").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/settings"))
+			.andExpect(flash().attribute("notice", containsString("archived")));
+		Workspace archived = this.workspaces.findBySlug("acme").orElseThrow();
+		assertThat(archived.archived()).isTrue();
+		assertThat(archived.archivedAt()).isNotNull();
+		this.mockMvc.perform(get("/w/acme/settings").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("This workspace is archived")));
+
+		// archiving an already archived workspace fails closed with a flash error
+		this.mockMvc.perform(post("/w/acme/archive").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/settings"))
+			.andExpect(flash().attribute("error", containsString("already archived")));
+
+		// reopening clears the flag and the archived banner is replaced by the archive
+		// link
+		this.mockMvc.perform(post("/w/acme/reopen").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/settings"))
+			.andExpect(flash().attribute("notice", containsString("reopened")));
+		Workspace reopened = this.workspaces.findBySlug("acme").orElseThrow();
+		assertThat(reopened.archived()).isFalse();
+		assertThat(reopened.archivedAt()).isNull();
+		this.mockMvc.perform(get("/w/acme/settings").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("Archive this workspace")));
 	}
 
 	private MockHttpSession login() throws Exception {

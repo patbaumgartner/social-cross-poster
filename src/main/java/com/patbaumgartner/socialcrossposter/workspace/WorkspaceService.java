@@ -79,7 +79,7 @@ public class WorkspaceService {
 			throw new WorkspaceException("A workspace with slug '" + normalizedSlug + "' already exists.");
 		}
 		return this.repository.save(new Workspace(null, normalizedSlug, validateLabel(label), validateColor(color),
-				validateTimezone(timezone), OffsetDateTime.now(), null, null, null, null, false));
+				validateTimezone(timezone), OffsetDateTime.now(), null, null, null, null, false, false, null));
 	}
 
 	/**
@@ -99,7 +99,7 @@ public class WorkspaceService {
 		return this.repository.save(new Workspace(existing.id(), existing.slug(), validateLabel(label),
 				validateColor(color), validateTimezone(timezone), existing.createdAt(), validateLanguages(languages),
 				validateBrandVoice(brandVoice), validateEventFacts(eventFacts), validateEventLinks(eventLinks),
-				existing.notifySnippets()));
+				existing.notifySnippets(), existing.archived(), existing.archivedAt()));
 	}
 
 	/**
@@ -113,9 +113,40 @@ public class WorkspaceService {
 		String normalizedSlug = slug == null ? "" : slug.trim();
 		Workspace existing = this.repository.findBySlug(normalizedSlug)
 			.orElseThrow(() -> new WorkspaceException("Unknown workspace."));
+		return this.repository
+			.save(new Workspace(existing.id(), existing.slug(), existing.label(), existing.color(), existing.timezone(),
+					existing.createdAt(), existing.languages(), existing.brandVoice(), existing.eventFacts(),
+					existing.eventLinks(), notifySnippets, existing.archived(), existing.archivedAt()));
+	}
+
+	/**
+	 * UC-15 step 6 (archive): sets the workspace's archived flag. Archiving records
+	 * {@code archived_at}; reopening clears both. Every other field of the existing row
+	 * is preserved and the slug is immutable. Fails closed (persists nothing) on an
+	 * unknown or blank slug.
+	 * @throws WorkspaceException with a sanitized, user-presentable message
+	 */
+	public Workspace setArchived(String slug, boolean archived) {
+		String normalizedSlug = slug == null ? "" : slug.trim();
+		Workspace existing = this.repository.findBySlug(normalizedSlug)
+			.orElseThrow(() -> new WorkspaceException("Unknown workspace."));
 		return this.repository.save(new Workspace(existing.id(), existing.slug(), existing.label(), existing.color(),
 				existing.timezone(), existing.createdAt(), existing.languages(), existing.brandVoice(),
-				existing.eventFacts(), existing.eventLinks(), notifySnippets));
+				existing.eventFacts(), existing.eventLinks(), existing.notifySnippets(), archived,
+				archived ? OffsetDateTime.now() : null));
+	}
+
+	/**
+	 * UC-15 step 6 guard: an archived workspace blocks new publication, scheduling and AI
+	 * assistance (UC-16). History, media and settings stay readable and the export keeps
+	 * working.
+	 * @throws WorkspaceException with a sanitized, user-presentable message
+	 */
+	public static void assertActive(Workspace workspace) {
+		if (workspace != null && workspace.archived()) {
+			throw new WorkspaceException("Workspace '" + workspace.slug()
+					+ "' is archived — new publication, scheduling and AI assistance are blocked until it is reopened.");
+		}
 	}
 
 	private static String validateLabel(String label) {
