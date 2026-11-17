@@ -8,6 +8,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.patbaumgartner.socialcrossposter.content.PostRevision;
+import com.patbaumgartner.socialcrossposter.content.PostRevisionRepository;
+import com.patbaumgartner.socialcrossposter.publish.PublicationRepository;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
 
@@ -19,7 +22,10 @@ import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
  * x jitter [0.8, 1.2), capped after jitter — and at most {@code maxAttempts} (3) total
  * attempts. The send dispatches on the channel type: webhook channels get a signed POST,
  * SMTP channels a mail. SENT/terminal rows keep a redacted detail only; failures never
- * create new events, so delivery cannot recurse (UC-12 alternative flow 3).
+ * create new events, so delivery cannot recurse (UC-12 alternative flow 3). External
+ * payloads stay redacted unless the workspace opted in to text snippets
+ * ({@code workspace.notify_snippets}, UC-15 fifth slice / UC-12 alternative flow 4); then
+ * a bounded snippet of the linked publication's approved revision is appended.
  */
 @Service
 public class NotificationDeliveryService {
@@ -38,6 +44,10 @@ public class NotificationDeliveryService {
 
 	private final WorkspaceRepository workspaces;
 
+	private final PublicationRepository publications;
+
+	private final PostRevisionRepository revisions;
+
 	private final NotificationChannelService channelService;
 
 	private final WebhookSender webhookSender;
@@ -48,14 +58,20 @@ public class NotificationDeliveryService {
 
 	private final SecureRandom random = new SecureRandom();
 
+	/** Max characters of the opt-in text snippet appended to external payloads. */
+	private static final int SNIPPET_MAX = 200;
+
 	public NotificationDeliveryService(NotificationDeliveryRepository deliveries,
 			NotificationChannelRepository channels, NotificationEventRepository events, WorkspaceRepository workspaces,
+			PublicationRepository publications, PostRevisionRepository revisions,
 			NotificationChannelService channelService, WebhookSender webhookSender, SmtpSender smtpSender,
 			NotifyProperties props) {
 		this.deliveries = deliveries;
 		this.channels = channels;
 		this.events = events;
 		this.workspaces = workspaces;
+		this.publications = publications;
+		this.revisions = revisions;
 		this.channelService = channelService;
 		this.webhookSender = webhookSender;
 		this.smtpSender = smtpSender;
@@ -116,9 +132,10 @@ public class NotificationDeliveryService {
 			.orElseThrow(() -> new NotificationException("Unknown workspace."));
 		// type-aware sealed credential: HMAC secret for webhooks, SMTP password for SMTP
 		String credential = this.channelService.openSecret(workspace.slug(), channel);
-		NotificationPayload payload = new NotificationPayload(event.id(), event.eventKey(), workspace.id(),
-				workspace.label(), event.category(), event.summary(), event.publicationId(), event.deliveryId(),
-				event.scheduleId(), event.connectionId(), event.createdAt());
+		NotificationPayload payload = maybeWithSnippet(workspace, event,
+				new NotificationPayload(event.id(), event.eventKey(), workspace.id(), workspace.label(),
+						event.category(), event.summary(), event.publicationId(), event.deliveryId(),
+						event.scheduleId(), event.connectionId(), event.createdAt()));
 		SendResult result = channel.isSmtp() ? this.smtpSender.send(channel, credential, payload)
 				: this.webhookSender.send(channel.url(), credential, payload);
 		int attempts = row.attempts() + 1;
@@ -148,6 +165,47 @@ public class NotificationDeliveryService {
 		}
 		this.deliveries.save(new NotificationDelivery(row.id(), workspaceId, row.eventId(), row.channelId(), state,
 				attempts, detail, nextAttemptAt, row.createdAt(), now));
+	}
+
+	/**
+	 * UC-12 alternative flow 4 / UC-15 fifth slice: external payloads stay redacted
+	 * unless the workspace explicitly opted in via {@code notify_snippets}; then a
+	 * bounded, whitespace-collapsed snippet of the linked publication's approved revision
+	 * text is appended to the summary. A missing publication/revision never fails the
+	 * delivery — the redacted summary stays.
+	 */
+	private NotificationPayload maybeWithSnippet(Workspace workspace, NotificationEvent event,
+			NotificationPayload payload) {
+		if (!workspace.notifySnippets() || event.publicationId() == null) {
+			return payload;
+		}
+		String snippet = this.publications.findByIdAndWorkspaceId(event.publicationId(), workspace.id())
+			.flatMap(pub -> this.revisions.findByIdAndWorkspaceIdAndPostId(pub.revisionId(), workspace.id(),
+					pub.postId()))
+			.map(PostRevision::defaultText)
+			.map(NotificationDeliveryService::snippet)
+			.orElse(null);
+		if (snippet == null) {
+			return payload;
+		}
+		return payload.withSummary(payload.summary() + " | text snippet: \"" + snippet + "\"");
+	}
+
+	/**
+	 * Collapses all whitespace runs to single spaces and caps at 200 chars + ellipsis.
+	 */
+	static String snippet(String text) {
+		if (text == null) {
+			return null;
+		}
+		String collapsed = text.replaceAll("\\s+", " ").trim();
+		if (collapsed.isEmpty()) {
+			return null;
+		}
+		if (collapsed.length() > SNIPPET_MAX) {
+			return collapsed.substring(0, SNIPPET_MAX) + "…";
+		}
+		return collapsed;
 	}
 
 	/**

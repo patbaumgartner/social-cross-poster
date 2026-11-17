@@ -17,7 +17,9 @@ import org.springframework.util.StringUtils;
  * every workspace URL, so it is restricted to lowercase URL-safe characters and immutable
  * afterwards. Updating settings validates label/color/timezone plus the profile
  * (languages, brand voice) and the protected event anchors (event facts, event links)
- * with the same rules and fails closed on an unknown slug.
+ * with the same rules and fails closed on an unknown slug; the notification default
+ * (snippet opt-in) has its own single-purpose update and is preserved by settings
+ * updates.
  */
 @Service
 public class WorkspaceService {
@@ -77,7 +79,7 @@ public class WorkspaceService {
 			throw new WorkspaceException("A workspace with slug '" + normalizedSlug + "' already exists.");
 		}
 		return this.repository.save(new Workspace(null, normalizedSlug, validateLabel(label), validateColor(color),
-				validateTimezone(timezone), OffsetDateTime.now(), null, null, null, null));
+				validateTimezone(timezone), OffsetDateTime.now(), null, null, null, null, false));
 	}
 
 	/**
@@ -96,7 +98,24 @@ public class WorkspaceService {
 			.orElseThrow(() -> new WorkspaceException("Unknown workspace."));
 		return this.repository.save(new Workspace(existing.id(), existing.slug(), validateLabel(label),
 				validateColor(color), validateTimezone(timezone), existing.createdAt(), validateLanguages(languages),
-				validateBrandVoice(brandVoice), validateEventFacts(eventFacts), validateEventLinks(eventLinks)));
+				validateBrandVoice(brandVoice), validateEventFacts(eventFacts), validateEventLinks(eventLinks),
+				existing.notifySnippets()));
+	}
+
+	/**
+	 * UC-15 step 2 (notification defaults) / UC-12 alternative flow 4: sets the
+	 * workspace's snippet opt-in for external notification payloads. The slug is
+	 * immutable; every other field of the existing row is preserved. Fails closed
+	 * (persists nothing) on an unknown or blank slug.
+	 * @throws WorkspaceException with a sanitized, user-presentable message
+	 */
+	public Workspace updateNotificationDefaults(String slug, boolean notifySnippets) {
+		String normalizedSlug = slug == null ? "" : slug.trim();
+		Workspace existing = this.repository.findBySlug(normalizedSlug)
+			.orElseThrow(() -> new WorkspaceException("Unknown workspace."));
+		return this.repository.save(new Workspace(existing.id(), existing.slug(), existing.label(), existing.color(),
+				existing.timezone(), existing.createdAt(), existing.languages(), existing.brandVoice(),
+				existing.eventFacts(), existing.eventLinks(), notifySnippets));
 	}
 
 	private static String validateLabel(String label) {
