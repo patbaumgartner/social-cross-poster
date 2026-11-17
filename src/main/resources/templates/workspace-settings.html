@@ -26,6 +26,13 @@
       <label>Timezone
         <input type="text" name="timezone" maxlength="64" th:value="${workspace.timezone}" placeholder="Europe/Zurich">
       </label>
+      <label>Languages (csv, empty = unset; default for AI assistance)
+        <input type="text" name="languages" maxlength="255" th:value="${workspace.languages}" placeholder="de, en, fr-CH">
+      </label>
+      <label>Brand voice (optional; default for AI assistance)
+        <textarea name="brandVoice" maxlength="2000" rows="4" th:text="${workspace.brandVoice}"
+                  placeholder="Friendly, concise, no emoji…"></textarea>
+      </label>
       <button type="submit">Save settings</button>
     </form>
     <p><a th:href="@{/w/{slug}/dashboard(slug=${workspace.slug})}">&larr; Back to dashboard</a></p>

@@ -242,7 +242,9 @@ class WorkspaceFlowTest {
 				.session(session)
 				.param("label", " Acme AG ")
 				.param("color", "#059669")
-				.param("timezone", "Europe/Berlin"))
+				.param("timezone", "Europe/Berlin")
+				.param("languages", "de, en, fr-CH")
+				.param("brandVoice", "Friendly, concise."))
 			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrl("/w/acme/dashboard"))
 			.andExpect(flash().attribute("notice", containsString("Acme AG")));
@@ -254,6 +256,8 @@ class WorkspaceFlowTest {
 		assertThat(after.label()).isEqualTo("Acme AG");
 		assertThat(after.color()).isEqualTo("#059669");
 		assertThat(after.timezone()).isEqualTo("Europe/Berlin");
+		assertThat(after.languages()).isEqualTo("de,en,fr-CH");
+		assertThat(after.brandVoice()).isEqualTo("Friendly, concise.");
 
 		// The dashboard shows the new label, and the settings form pre-fills the new
 		// values.
@@ -263,7 +267,30 @@ class WorkspaceFlowTest {
 		this.mockMvc.perform(get("/w/acme/settings").session(session))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("Acme AG")))
-			.andExpect(content().string(containsString("Europe/Berlin")));
+			.andExpect(content().string(containsString("Europe/Berlin")))
+			.andExpect(content().string(containsString("de,en,fr-CH")));
+	}
+
+	@Test
+	void updateSettingsInvalidLanguagesShowsErrorAndLeavesRowUnchanged() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc
+			.perform(post("/workspaces").with(csrf()).session(session).param("slug", "acme").param("label", "Acme"))
+			.andExpect(status().is3xxRedirection());
+
+		this.mockMvc
+			.perform(post("/w/acme/settings").with(csrf())
+				.session(session)
+				.param("label", "Acme")
+				.param("languages", "english!"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/settings"))
+			.andExpect(flash().attribute("error", containsString("language")));
+
+		Workspace row = this.workspaces.findBySlug("acme").orElseThrow();
+		assertThat(row.label()).isEqualTo("Acme");
+		assertThat(row.languages()).isNull();
+		assertThat(row.brandVoice()).isNull();
 	}
 
 	@Test
