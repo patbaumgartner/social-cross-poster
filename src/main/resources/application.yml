@@ -101,6 +101,9 @@ app:
     # When enabled they are listed with a permanent "experimental / unofficial"
     # label but stay unavailable until a bridge passes the ADR-010 feasibility
     # probe. WhatsApp Business is permanently excluded and never offered.
+    # The locally protected pairing/setup path lives at /w/{slug}/experiments
+    # (owner login + CSRF on the loopback-only deployment — no public pairing
+    # UI); it stays closed until flag + record + wired bridge adapter all hold.
     enabled: ${APP_EXPERIMENTAL_ENABLED:false}
     # Dated ADR-010 feasibility records, one entry per experimental platform key,
     # e.g. APP_EXPERIMENTAL_FEASIBILITY_SIGNAL="2026-11-17 local probe record …".
