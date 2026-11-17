@@ -298,8 +298,9 @@ class WorkspaceServiceTest {
 	@Test
 	void updateNotificationDefaultsPersistsFlagAndKeepsAllOtherFields() {
 		OffsetDateTime createdAt = OffsetDateTime.parse("2026-11-17T10:00:00Z");
-		given(this.repository.findBySlug("acme")).willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6",
-				"Europe/Zurich", createdAt, "de,en", "Friendly.", "Voxxed Days.", "https://example.com", false)));
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", createdAt, "de,en",
+					"Friendly.", "Voxxed Days.", "https://example.com", false, false, null)));
 
 		Workspace optedIn = this.service.updateNotificationDefaults(" acme ", true);
 
@@ -332,6 +333,59 @@ class WorkspaceServiceTest {
 			.hasMessageContaining("Unknown workspace");
 		assertThatThrownBy(() -> this.service.updateNotificationDefaults("   ", true))
 			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Unknown workspace");
+		verify(this.repository, never()).save(any());
+	}
+
+	@Test
+	void setArchivedTrueSetsFlagAndTimestampAndPreservesAllOtherFields() {
+		OffsetDateTime createdAt = OffsetDateTime.parse("2026-11-17T10:00:00Z");
+		given(this.repository.findBySlug("acme"))
+			.willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6", "Europe/Zurich", createdAt, "de,en",
+					"Friendly.", "Voxxed Days.", "https://example.com", true, false, null)));
+
+		Workspace archived = this.service.setArchived(" acme ", true);
+
+		ArgumentCaptor<Workspace> captor = ArgumentCaptor.forClass(Workspace.class);
+		verify(this.repository).save(captor.capture());
+		Workspace saved = captor.getValue();
+		assertThat(saved.id()).isEqualTo(7L);
+		assertThat(saved.slug()).isEqualTo("acme");
+		assertThat(saved.label()).isEqualTo("Acme");
+		assertThat(saved.color()).isEqualTo("#3b82f6");
+		assertThat(saved.timezone()).isEqualTo("Europe/Zurich");
+		assertThat(saved.createdAt()).isEqualTo(createdAt);
+		assertThat(saved.languages()).isEqualTo("de,en");
+		assertThat(saved.brandVoice()).isEqualTo("Friendly.");
+		assertThat(saved.eventFacts()).isEqualTo("Voxxed Days.");
+		assertThat(saved.eventLinks()).isEqualTo("https://example.com");
+		assertThat(saved.notifySnippets()).isTrue();
+		assertThat(saved.archived()).isTrue();
+		assertThat(saved.archivedAt()).isNotNull();
+		assertThat(archived).isSameAs(saved);
+	}
+
+	@Test
+	void setArchivedFalseClearsFlagAndTimestamp() {
+		OffsetDateTime createdAt = OffsetDateTime.parse("2026-11-17T10:00:00Z");
+		given(this.repository.findBySlug("acme")).willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6",
+				"Europe/Zurich", createdAt, null, null, null, null, false, true, createdAt)));
+
+		Workspace reopened = this.service.setArchived("acme", false);
+
+		ArgumentCaptor<Workspace> captor = ArgumentCaptor.forClass(Workspace.class);
+		verify(this.repository).save(captor.capture());
+		Workspace saved = captor.getValue();
+		assertThat(saved.archived()).isFalse();
+		assertThat(saved.archivedAt()).isNull();
+		assertThat(reopened).isSameAs(saved);
+	}
+
+	@Test
+	void setArchivedUnknownOrBlankSlugFailsClosedAndSavesNothing() {
+		assertThatThrownBy(() -> this.service.setArchived("ghost", true)).isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Unknown workspace");
+		assertThatThrownBy(() -> this.service.setArchived("   ", true)).isInstanceOf(WorkspaceException.class)
 			.hasMessageContaining("Unknown workspace");
 		verify(this.repository, never()).save(any());
 	}

@@ -274,8 +274,8 @@ class NotificationDeliveryServiceTest {
 		given(this.deliveries.findDue(WS, NOW)).willReturn(List.of(row));
 		given(this.events.findById(42L)).willReturn(Optional.of(event(NotificationService.C_DELIVERY_FAILED)));
 		given(this.channels.findByIdAndWorkspaceId(1L, WS)).willReturn(Optional.of(channel(1L, "")));
-		given(this.workspaces.findById(WS)).willReturn(
-				Optional.of(new Workspace(WS, "private", "Private", "#fff", "UTC", NOW, null, null, null, null, true)));
+		given(this.workspaces.findById(WS)).willReturn(Optional.of(new Workspace(WS, "private", "Private", "#fff",
+				"UTC", NOW, null, null, null, null, true, false, null)));
 		given(this.channelService.openSecret(anyString(), any())).willReturn("secret");
 		given(this.publications.findByIdAndWorkspaceId(100L, WS))
 			.willReturn(Optional.of(new Publication(100L, WS, 7L, 55L, "sub-key", "APPROVED", "hash", NOW, NOW)));
@@ -299,8 +299,8 @@ class NotificationDeliveryServiceTest {
 		given(this.deliveries.findDue(WS, NOW)).willReturn(List.of(row));
 		given(this.events.findById(42L)).willReturn(Optional.of(event(NotificationService.C_DELIVERY_FAILED)));
 		given(this.channels.findByIdAndWorkspaceId(1L, WS)).willReturn(Optional.of(channel(1L, "")));
-		given(this.workspaces.findById(WS)).willReturn(
-				Optional.of(new Workspace(WS, "private", "Private", "#fff", "UTC", NOW, null, null, null, null, true)));
+		given(this.workspaces.findById(WS)).willReturn(Optional.of(new Workspace(WS, "private", "Private", "#fff",
+				"UTC", NOW, null, null, null, null, true, false, null)));
 		given(this.channelService.openSecret(anyString(), any())).willReturn("secret");
 		given(this.publications.findByIdAndWorkspaceId(100L, WS)).willReturn(Optional.empty());
 		given(this.sender.send(anyString(), anyString(), any(NotificationPayload.class))).willReturn(SendResult.sent());
