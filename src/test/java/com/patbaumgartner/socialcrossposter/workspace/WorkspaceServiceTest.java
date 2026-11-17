@@ -295,4 +295,45 @@ class WorkspaceServiceTest {
 		verify(this.repository, never()).save(any());
 	}
 
+	@Test
+	void updateNotificationDefaultsPersistsFlagAndKeepsAllOtherFields() {
+		OffsetDateTime createdAt = OffsetDateTime.parse("2026-11-17T10:00:00Z");
+		given(this.repository.findBySlug("acme")).willReturn(Optional.of(new Workspace(7L, "acme", "Acme", "#3b82f6",
+				"Europe/Zurich", createdAt, "de,en", "Friendly.", "Voxxed Days.", "https://example.com", false)));
+
+		Workspace optedIn = this.service.updateNotificationDefaults(" acme ", true);
+
+		ArgumentCaptor<Workspace> captor = ArgumentCaptor.forClass(Workspace.class);
+		verify(this.repository).save(captor.capture());
+		Workspace saved = captor.getValue();
+		assertThat(saved.id()).isEqualTo(7L);
+		assertThat(saved.slug()).isEqualTo("acme");
+		assertThat(saved.createdAt()).isEqualTo(createdAt);
+		assertThat(saved.label()).isEqualTo("Acme");
+		assertThat(saved.color()).isEqualTo("#3b82f6");
+		assertThat(saved.timezone()).isEqualTo("Europe/Zurich");
+		assertThat(saved.languages()).isEqualTo("de,en");
+		assertThat(saved.brandVoice()).isEqualTo("Friendly.");
+		assertThat(saved.eventFacts()).isEqualTo("Voxxed Days.");
+		assertThat(saved.eventLinks()).isEqualTo("https://example.com");
+		assertThat(saved.notifySnippets()).isTrue();
+		assertThat(optedIn.notifySnippets()).isTrue();
+
+		Workspace optedOut = this.service.updateNotificationDefaults("acme", false);
+		assertThat(optedOut.notifySnippets()).isFalse();
+	}
+
+	@Test
+	void updateNotificationDefaultsUnknownSlugFailsClosedAndSavesNothing() {
+		given(this.repository.findBySlug("ghost")).willReturn(Optional.empty());
+
+		assertThatThrownBy(() -> this.service.updateNotificationDefaults("ghost", true))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Unknown workspace");
+		assertThatThrownBy(() -> this.service.updateNotificationDefaults("   ", true))
+			.isInstanceOf(WorkspaceException.class)
+			.hasMessageContaining("Unknown workspace");
+		verify(this.repository, never()).save(any());
+	}
+
 }

@@ -8,6 +8,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.patbaumgartner.socialcrossposter.content.PostRevision;
+import com.patbaumgartner.socialcrossposter.content.PostRevisionRepository;
+import com.patbaumgartner.socialcrossposter.publish.Publication;
+import com.patbaumgartner.socialcrossposter.publish.PublicationRepository;
 import com.patbaumgartner.socialcrossposter.workspace.Workspace;
 import com.patbaumgartner.socialcrossposter.workspace.WorkspaceRepository;
 
@@ -43,6 +47,10 @@ class NotificationDeliveryServiceTest {
 
 	private WorkspaceRepository workspaces;
 
+	private PublicationRepository publications;
+
+	private PostRevisionRepository revisions;
+
 	private NotificationChannelService channelService;
 
 	private WebhookSender sender;
@@ -57,12 +65,14 @@ class NotificationDeliveryServiceTest {
 		this.channels = mock(NotificationChannelRepository.class);
 		this.events = mock(NotificationEventRepository.class);
 		this.workspaces = mock(WorkspaceRepository.class);
+		this.publications = mock(PublicationRepository.class);
+		this.revisions = mock(PostRevisionRepository.class);
 		this.channelService = mock(NotificationChannelService.class);
 		this.sender = mock(WebhookSender.class);
 		this.smtpSender = mock(SmtpSender.class);
 		NotifyProperties props = new NotifyProperties(null, null, null, 3, 60L, 3600L, null, null, List.of());
 		this.service = new NotificationDeliveryService(this.deliveries, this.channels, this.events, this.workspaces,
-				this.channelService, this.sender, this.smtpSender, props);
+				this.publications, this.revisions, this.channelService, this.sender, this.smtpSender, props);
 	}
 
 	private NotificationEvent event(String category) {
@@ -256,6 +266,63 @@ class NotificationDeliveryServiceTest {
 		long second = this.service.backoffSeconds(2); // 60 * 2^1 * [0.8,1.2)
 		assertThat(second).isBetween(96L, 144L);
 		assertThat(this.service.backoffSeconds(100)).isEqualTo(3600L); // capped
+	}
+
+	@Test
+	void runDueWithSnippetOptInAppendsBoundedPostTextSnippet() {
+		NotificationDelivery row = row(7L, 1L, 0);
+		given(this.deliveries.findDue(WS, NOW)).willReturn(List.of(row));
+		given(this.events.findById(42L)).willReturn(Optional.of(event(NotificationService.C_DELIVERY_FAILED)));
+		given(this.channels.findByIdAndWorkspaceId(1L, WS)).willReturn(Optional.of(channel(1L, "")));
+		given(this.workspaces.findById(WS)).willReturn(
+				Optional.of(new Workspace(WS, "private", "Private", "#fff", "UTC", NOW, null, null, null, null, true)));
+		given(this.channelService.openSecret(anyString(), any())).willReturn("secret");
+		given(this.publications.findByIdAndWorkspaceId(100L, WS))
+			.willReturn(Optional.of(new Publication(100L, WS, 7L, 55L, "sub-key", "APPROVED", "hash", NOW, NOW)));
+		given(this.revisions.findByIdAndWorkspaceIdAndPostId(55L, WS, 7L))
+			.willReturn(Optional.of(new PostRevision(55L, WS, 7L, 2, "  Hello   Voxxed\nDays Zurich 2026!  ", NOW)));
+		given(this.sender.send(anyString(), anyString(), any(NotificationPayload.class))).willReturn(SendResult.sent());
+
+		this.service.runDue(WS, NOW);
+
+		ArgumentCaptor<NotificationPayload> payload = ArgumentCaptor.forClass(NotificationPayload.class);
+		verify(this.sender).send(anyString(), eq("secret"), payload.capture());
+		// UC-12 alternative flow 4 opt-in (UC-15 fifth slice): bounded, whitespace-
+		// collapsed snippet appended; the redacted summary stays as the prefix
+		assertThat(payload.getValue().summary())
+			.isEqualTo("redacted summary | text snippet: \"Hello Voxxed Days Zurich 2026!\"");
+	}
+
+	@Test
+	void runDueWithSnippetOptInButMissingPublicationKeepsRedactedSummary() {
+		NotificationDelivery row = row(7L, 1L, 0);
+		given(this.deliveries.findDue(WS, NOW)).willReturn(List.of(row));
+		given(this.events.findById(42L)).willReturn(Optional.of(event(NotificationService.C_DELIVERY_FAILED)));
+		given(this.channels.findByIdAndWorkspaceId(1L, WS)).willReturn(Optional.of(channel(1L, "")));
+		given(this.workspaces.findById(WS)).willReturn(
+				Optional.of(new Workspace(WS, "private", "Private", "#fff", "UTC", NOW, null, null, null, null, true)));
+		given(this.channelService.openSecret(anyString(), any())).willReturn("secret");
+		given(this.publications.findByIdAndWorkspaceId(100L, WS)).willReturn(Optional.empty());
+		given(this.sender.send(anyString(), anyString(), any(NotificationPayload.class))).willReturn(SendResult.sent());
+
+		this.service.runDue(WS, NOW);
+
+		ArgumentCaptor<NotificationPayload> payload = ArgumentCaptor.forClass(NotificationPayload.class);
+		verify(this.sender).send(anyString(), eq("secret"), payload.capture());
+		// a missing publication never fails the delivery — the redacted summary stays
+		assertThat(payload.getValue().summary()).isEqualTo("redacted summary");
+		verify(this.revisions, never()).findByIdAndWorkspaceIdAndPostId(anyLong(), anyLong(), anyLong());
+	}
+
+	@Test
+	void snippetCollapsesWhitespaceAndCapsAt200Chars() {
+		assertThat(NotificationDeliveryService.snippet("  a \n\t b  c ")).isEqualTo("a b c");
+		assertThat(NotificationDeliveryService.snippet(null)).isNull();
+		assertThat(NotificationDeliveryService.snippet("   ")).isNull();
+		String longText = "x".repeat(500);
+		String snippet = NotificationDeliveryService.snippet(longText);
+		assertThat(snippet).hasSize(201); // 200 chars + ellipsis
+		assertThat(snippet).endsWith("…");
 	}
 
 }

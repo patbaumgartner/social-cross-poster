@@ -346,6 +346,43 @@ class WorkspaceFlowTest {
 		assertThat(this.workspaces.count()).isEqualTo(before);
 	}
 
+	@Test
+	void updateNotificationDefaultsFlowTogglesSnippetOptIn() throws Exception {
+		MockHttpSession session = login();
+		this.mockMvc
+			.perform(post("/workspaces").with(csrf()).session(session).param("slug", "acme").param("label", "Acme"))
+			.andExpect(status().is3xxRedirection());
+		assertThat(this.workspaces.findBySlug("acme").orElseThrow().notifySnippets()).isFalse(); // default
+
+		// opt in via the checkbox
+		this.mockMvc
+			.perform(post("/w/acme/settings/notifications").with(csrf()).session(session).param("notifySnippets", "on"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/dashboard"))
+			.andExpect(flash().attribute("notice", containsString("Notification defaults")));
+		Workspace optedIn = this.workspaces.findBySlug("acme").orElseThrow();
+		assertThat(optedIn.notifySnippets()).isTrue();
+		assertThat(optedIn.label()).isEqualTo("Acme"); // everything else preserved
+
+		// the settings form shows the checkbox checked
+		this.mockMvc.perform(get("/w/acme/settings").session(session))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("notifySnippets")));
+
+		// opt out again (checkbox absent)
+		this.mockMvc.perform(post("/w/acme/settings/notifications").with(csrf()).session(session))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/w/acme/dashboard"));
+		assertThat(this.workspaces.findBySlug("acme").orElseThrow().notifySnippets()).isFalse();
+
+		// unknown slug returns to the picker without touching anything
+		this.mockMvc
+			.perform(
+					post("/w/ghost/settings/notifications").with(csrf()).session(session).param("notifySnippets", "on"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/"));
+	}
+
 	private MockHttpSession login() throws Exception {
 		MvcResult result = this.mockMvc.perform(formLogin().user("owner").password("test-password"))
 			.andExpect(authenticated())
