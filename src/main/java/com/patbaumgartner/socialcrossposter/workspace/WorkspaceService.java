@@ -13,7 +13,9 @@ import org.springframework.util.StringUtils;
  * Workspace queries and lifecycle (UC-15). Callers always pass an explicit workspace;
  * missing context fails closed (ADR-013). Creating a workspace validates the slug, label,
  * color and timezone fail-closed and rejects duplicate slugs — the slug becomes part of
- * every workspace URL, so it is restricted to lowercase URL-safe characters.
+ * every workspace URL, so it is restricted to lowercase URL-safe characters and immutable
+ * afterwards. Updating settings validates label/color/timezone with the same rules and
+ * fails closed on an unknown slug.
  */
 @Service
 public class WorkspaceService {
@@ -58,20 +60,47 @@ public class WorkspaceService {
 		if (this.repository.findBySlug(normalizedSlug).isPresent()) {
 			throw new WorkspaceException("A workspace with slug '" + normalizedSlug + "' already exists.");
 		}
+		return this.repository.save(new Workspace(null, normalizedSlug, validateLabel(label), validateColor(color),
+				validateTimezone(timezone), OffsetDateTime.now()));
+	}
+
+	/**
+	 * UC-15 step 2: updates the label, color and timezone of an existing workspace. The
+	 * slug is immutable (it is part of every workspace URL) and never changes here; the
+	 * id and created_at of the existing row are kept. Fails closed (persists nothing) on
+	 * an unknown or blank slug and on invalid label/color/timezone.
+	 * @throws WorkspaceException with a sanitized, user-presentable message
+	 */
+	public Workspace updateSettings(String slug, String label, String color, String timezone) {
+		String normalizedSlug = slug == null ? "" : slug.trim();
+		Workspace existing = this.repository.findBySlug(normalizedSlug)
+			.orElseThrow(() -> new WorkspaceException("Unknown workspace."));
+		return this.repository.save(new Workspace(existing.id(), existing.slug(), validateLabel(label),
+				validateColor(color), validateTimezone(timezone), existing.createdAt()));
+	}
+
+	private static String validateLabel(String label) {
 		String normalizedLabel = label == null ? "" : label.trim();
 		if (normalizedLabel.isEmpty() || normalizedLabel.length() > 120) {
 			throw new WorkspaceException("Label must be 1-120 characters.");
 		}
+		return normalizedLabel;
+	}
+
+	private static String validateColor(String color) {
 		String normalizedColor = StringUtils.hasText(color) ? color.trim() : DEFAULT_COLOR;
 		if (!COLOR.matcher(normalizedColor).matches()) {
 			throw new WorkspaceException("Color must be a hex color like #3b82f6.");
 		}
+		return normalizedColor;
+	}
+
+	private static String validateTimezone(String timezone) {
 		String normalizedTimezone = StringUtils.hasText(timezone) ? timezone.trim() : DEFAULT_TIMEZONE;
 		if (!ZoneId.getAvailableZoneIds().contains(normalizedTimezone)) {
 			throw new WorkspaceException("Unknown IANA timezone — use an id like Europe/Zurich.");
 		}
-		return this.repository.save(new Workspace(null, normalizedSlug, normalizedLabel, normalizedColor,
-				normalizedTimezone, OffsetDateTime.now()));
+		return normalizedTimezone;
 	}
 
 }

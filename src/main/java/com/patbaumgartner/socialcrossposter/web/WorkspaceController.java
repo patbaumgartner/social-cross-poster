@@ -27,8 +27,9 @@ import com.patbaumgartner.socialcrossposter.workspace.WorkspaceService;
  * another workspace's resources. The dashboard also lists the workspace's in-app
  * notification events (UC-12 step 5), newest first, and its webhook channels with the
  * recent outbox rows (UC-12 second slice). UC-15 step 1: the owner creates a new
- * workspace from the picker; validation failures fail closed and persist nothing
- * (ADR-013).
+ * workspace from the picker; validation failures fail closed and persist nothing. UC-15
+ * step 2: the owner edits an existing workspace's label/color/timezone on
+ * /w/{slug}/settings — the slug is immutable (ADR-013).
  */
 @Controller
 public class WorkspaceController {
@@ -74,6 +75,41 @@ public class WorkspaceController {
 		catch (WorkspaceException ex) {
 			redirect.addFlashAttribute("error", ex.getMessage());
 			return "redirect:/";
+		}
+	}
+
+	/**
+	 * UC-15 step 2: settings form for one workspace. An unknown slug returns to the
+	 * picker without touching another workspace's settings.
+	 */
+	@GetMapping("/w/{slug}/settings")
+	public String settingsForm(@PathVariable String slug, Model model) {
+		return this.workspaces.findBySlug(slug).map((workspace) -> {
+			model.addAttribute("workspace", workspace);
+			return "workspace-settings";
+		}).orElse("redirect:/");
+	}
+
+	/**
+	 * UC-15 step 2: save label/color/timezone. The slug is immutable and never read from
+	 * the form. Validation failures are flashed as a sanitized error and the stored row
+	 * is left unchanged; success flashes a notice and returns to the dashboard.
+	 */
+	@PostMapping("/w/{slug}/settings")
+	public String updateSettings(@PathVariable String slug, @RequestParam String label,
+			@RequestParam(required = false) String color, @RequestParam(required = false) String timezone,
+			RedirectAttributes redirect) {
+		if (this.workspaces.findBySlug(slug).isEmpty()) {
+			return "redirect:/";
+		}
+		try {
+			Workspace updated = this.workspaces.updateSettings(slug, label, color, timezone);
+			redirect.addFlashAttribute("notice", "Settings for '" + updated.label() + "' saved.");
+			return "redirect:/w/" + updated.slug() + "/dashboard";
+		}
+		catch (WorkspaceException ex) {
+			redirect.addFlashAttribute("error", ex.getMessage());
+			return "redirect:/w/" + slug + "/settings";
 		}
 	}
 
