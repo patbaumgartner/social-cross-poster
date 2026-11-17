@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${workspace.label} + ' · Experiments')}"></head>
+<body>
+  <header th:replace="~{fragments/layout :: topbar}"></header>
+  <main class="content">
+    <h1 th:text="${workspace.label} + ' — experimental targets'">Experimental targets</h1>
+    <p><a th:href="@{/w/{slug}/accounts(slug=${workspace.slug})}">&larr; Accounts</a></p>
+
+    <p class="alert" role="alert" th:if="${error}" th:text="${error}">Error</p>
+    <p class="notice" role="status" th:if="${notice}" th:text="${notice}">Notice</p>
+
+    <section class="card">
+      <h2>Protected setup path <small th:text="'(' + ${experimentalLabel} + ')'">(experimental / unofficial)</small></h2>
+      <p>Optional, unofficial experiments (ADR-010). This setup path is private: it sits behind the owner
+        login on the loopback-only deployment and there is no public pairing/admin UI; sessions stay
+        isolated per workspace and connection. No experiment is a core-release requirement, and opt-in does
+        not imply guaranteed delivery, account safety, or official API support. WhatsApp Business is never
+        offered &mdash; no Cloud API, Business onboarding, Business messaging, or Business credentials.</p>
+      <p th:if="${!experimentalEnabled}">The experimental opt-in profile is off
+        (<code>APP_EXPERIMENTAL_ENABLED=false</code>) &mdash; every target below is unavailable.</p>
+      <table>
+        <thead>
+          <tr><th>Target</th><th>Label</th><th>Candidate kinds</th><th>Feasibility record</th><th>Availability</th><th>Pairing</th></tr>
+        </thead>
+        <tbody>
+          <tr th:each="t : ${targets}">
+            <td th:text="${t.platform}">signal</td>
+            <td th:text="${experimentalLabel}">experimental / unofficial</td>
+            <td th:text="${t.availability.kinds.isEmpty()} ? '—' : ${#strings.listJoin(t.availability.kinds, ', ')}">message</td>
+            <td th:text="${t.record.isEmpty()} ? '—' : ${t.record}">record</td>
+            <td th:text="${t.availability.available} ? 'available — opt in through this locally protected setup path' : ${t.availability.reason}">unavailable</td>
+            <td>
+              <form th:if="${t.availability.available}" method="post"
+                    th:action="@{/w/{slug}/experiments/{platform}/pair(slug=${workspace.slug},platform=${t.platform})}">
+                <button type="submit">Start protected pairing</button>
+              </form>
+              <span th:if="${!t.availability.available}">—</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Without a proven bridge no pairing endpoint or wizard is offered — a target shows its precise
+        unavailability reason instead (UC-14 alternative flow 1). Signal story publishing is a separate
+        capability and stays blocked, never sent as a chat message instead.</p>
+    </section>
+  </main>
+</body>
+</html>
